@@ -527,7 +527,7 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
     padding:10px 16px; overflow:hidden; outline:none; cursor:text;
     font-family:'Pretendard', sans-serif; font-weight:600; line-height:1.35;
-    font-size:17px; color:var(--ink-text); border-radius:10px;
+    font-size:15px; color:var(--ink-text); border-radius:10px;
     transition:box-shadow .12s ease;
   }
   .textbox-content:focus{ box-shadow:0 0 0 3px rgba(51,70,95,.12); }
@@ -537,7 +537,7 @@
   .textbox[data-style="plain"] .textbox-content{ background:transparent; border:none; }
   .textbox[data-style="tag"] .textbox-content{
     background:var(--ink); color:#fff; border:none; border-radius:999px;
-    font-family:'Pretendard', sans-serif; font-size:13.5px; letter-spacing:.04em; text-transform:uppercase;
+    font-family:'Pretendard', sans-serif; font-size:12px; letter-spacing:.04em; text-transform:uppercase;
   }
   .textbox[data-style="bubble"] .textbox-content{ background:#fff; border:none; border-radius:20px; }
   .textbox[data-style="postit"] .textbox-content{
@@ -2501,6 +2501,63 @@
         context.arcTo(x, y, x + w, y, r);
         context.closePath();
       }
+
+      // html2canvas doesn't render box-shadow, so the postit-style textbox's
+      // drop shadow silently disappears in the export. Recreate it manually:
+      // compute the box's rotated rectangle, then for each shadow layer draw
+      // its caster far off-canvas (so its own opaque fill never rasterizes
+      // inside the visible canvas at all) and use shadowOffsetX/Y to bring
+      // only the blurred shadow back to the correct on-canvas position. A
+      // clip excludes the box's own real (unshifted) footprint so the
+      // already-correct box + text baked into bigCanvas is left untouched —
+      // only the halo around it is added.
+      document.querySelectorAll('.textbox[data-style="postit"] .textbox-content').forEach(content => {
+        const r = content.getBoundingClientRect();
+        if(r.width === 0 || r.height === 0) return;
+        const cs = getComputedStyle(content);
+        const cx = (r.left + r.width / 2 - stageRect.left) * scaleFactor;
+        const cy = (r.top + r.height / 2 - stageRect.top) * scaleFactor;
+        const halfW = (content.offsetWidth / 2) * scaleFactor;
+        const halfH = (content.offsetHeight / 2) * scaleFactor;
+        let angle = 0;
+        const m = (cs.transform || '').match(/matrix\(([^)]+)\)/);
+        if(m){
+          const p = m[1].split(',').map(Number);
+          angle = Math.atan2(p[1], p[0]);
+        }
+        function rectCorners(offsetX, offsetY){
+          const off = { x: offsetX * Math.cos(angle) - offsetY * Math.sin(angle), y: offsetX * Math.sin(angle) + offsetY * Math.cos(angle) };
+          return [[-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH]]
+            .map(([px, py]) => ({ x: cx + off.x + px * Math.cos(angle) - py * Math.sin(angle), y: cy + off.y + px * Math.sin(angle) + py * Math.cos(angle) }));
+        }
+        function pathFromCorners(corners){
+          ctx.moveTo(corners[0].x, corners[0].y);
+          ctx.lineTo(corners[1].x, corners[1].y);
+          ctx.lineTo(corners[2].x, corners[2].y);
+          ctx.lineTo(corners[3].x, corners[3].y);
+          ctx.closePath();
+        }
+        const ownCorners = rectCorners(0, 0);
+        const OFFSCREEN = 4000;
+
+        [{ dx: 0, dy: 4, blur: 12, alpha: 0.18 }, { dx: 0, dy: 1, blur: 3, alpha: 0.12 }].forEach(layer => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, canvas.width, canvas.height);
+          pathFromCorners(ownCorners);
+          ctx.clip('evenodd');
+          const shifted = rectCorners(layer.dx, layer.dy).map(pt => ({ x: pt.x + OFFSCREEN, y: pt.y + OFFSCREEN }));
+          ctx.shadowColor = `rgba(0,0,0,${layer.alpha})`;
+          ctx.shadowBlur = layer.blur * scaleFactor;
+          ctx.shadowOffsetX = -OFFSCREEN;
+          ctx.shadowOffsetY = -OFFSCREEN;
+          ctx.fillStyle = 'rgba(0,0,0,1)';
+          ctx.beginPath();
+          pathFromCorners(shifted);
+          ctx.fill();
+          ctx.restore();
+        });
+      });
 
       document.querySelectorAll('.img-slot.has-img').forEach(slot => {
         const img = slot._sourceImage;
