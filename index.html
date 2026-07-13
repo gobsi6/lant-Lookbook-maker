@@ -213,13 +213,13 @@
   .img-slot.has-img .clear-btn{ display:flex; }
   .item-no{
     position:absolute; top:8px; left:8px; z-index:5;
-    font-family:'Pretendard', sans-serif; font-size:10.5px; font-weight:600;
-    color:#fff; background:rgba(0,0,0,.4); padding:3px 7px; border-radius:3px; letter-spacing:.03em;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; font-weight:600;
+    color:#fff; background:rgba(0,0,0,.4); padding:3px 7px; border-radius:3px; letter-spacing:.02em;
     display:inline-flex; align-items:center; justify-content:center; line-height:1;
   }
   /* Nudge just the text down 1px rather than the badge box itself, matching
      the same optical-centering technique used for the 네모네모 페어틀 badges. */
-  .item-no-text{ pointer-events:none; position:relative; top:1px; }
+  .item-no-text{ pointer-events:none; position:relative; top:0.5px; }
   .img-slot .slot-caption{
     position:absolute; right:4px; bottom:8px; left:auto; z-index:4;
     max-width:calc(100% - 8px); margin:0; padding:4px 10px;
@@ -522,6 +522,7 @@
     content:''; position:absolute; left:0; right:0; top:-34px; height:34px; z-index:2;
   }
   .textbox-content{
+    position:relative; z-index:1;
     width:100%; height:100%; box-sizing:border-box;
     display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
     padding:10px 16px; overflow:hidden; outline:none; cursor:text;
@@ -538,12 +539,22 @@
     background:var(--ink); color:#fff; border:none; border-radius:999px;
     font-family:'Pretendard', sans-serif; font-size:13.5px; letter-spacing:.04em; text-transform:uppercase;
   }
-  .textbox[data-style="bubble"] .textbox-content{ background:#fff; border:1px solid var(--ink); border-radius:20px; }
+  .textbox[data-style="bubble"] .textbox-content{ background:#fff; border:none; border-radius:20px; }
   .textbox[data-style="postit"] .textbox-content{
     background:#FFF3B0; color:#4A4842; border:none; border-radius:2px;
     box-shadow:0 4px 12px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.12);
     transform:rotate(-2deg);
   }
+  /* Bubble style's outline isn't drawn as a border on the box itself — instead
+     a solid ink-colored panel sits directly behind the (border-less) white
+     box, 1px larger on every side, so only a 1px rim peeks out around it.
+     Combined with the tail triangles below (also z-index'd above this panel),
+     the outline reads as one continuous ink silhouette with no seam where the
+     box's own straight edge would otherwise meet the triangle's sloped sides. */
+  .textbox-bubble-backer{
+    position:absolute; inset:-1px; z-index:0; display:none; background:var(--ink);
+  }
+  .textbox[data-style="bubble"] .textbox-bubble-backer{ display:block; border-radius:21px; }
   .textbox-tail-border, .textbox-tail-fill{
     position:absolute; width:0; height:0; pointer-events:none; display:none; z-index:1;
     left:50%; transform:translateX(-50%);
@@ -704,11 +715,11 @@
       <button class="ghost toolbar-btn" id="sizeSettingsBtn" title="이미지 크기"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg><span class="btn-label">이미지 크기</span></button>
       <div class="size-panel" id="sizePanel" hidden>
         <label>프로필 이미지 크기
-          <input type="range" id="profileSizeRange" min="120" max="260" step="1" value="220">
+          <input type="range" id="profileSizeRange" min="119" max="259" step="1" value="220">
           <span class="size-val" id="profileSizeVal">220px</span>
         </label>
         <label>의상 이미지 높이
-          <input type="range" id="outfitHeightRange" min="200" max="650" step="1" value="530">
+          <input type="range" id="outfitHeightRange" min="175" max="665" step="1" value="530">
           <span class="size-val" id="outfitHeightVal">530px</span>
         </label>
         <label>의상 한 줄 표시 개수
@@ -933,6 +944,21 @@
 </div>
 
 <script>
+  // ---- Export scale: on-screen stage is a fixed 1400px-wide canvas, but the
+  // downloaded PNG is rendered at 2000px wide. Any px number shown to the user
+  // (ruler ticks, alignment-guide labels, size-panel values) should read as the
+  // pixel size it will actually come out to in that 2000px export, not the raw
+  // on-screen CSS px — so every display value is multiplied by this factor.
+  const EXPORT_TARGET_WIDTH = 2000;
+  function getExportScale(){
+    const stageEl = document.getElementById('stage');
+    const w = stageEl ? stageEl.getBoundingClientRect().width : 0;
+    return w > 0 ? EXPORT_TARGET_WIDTH / w : 1;
+  }
+  function toExportPx(cssPx){
+    return Math.round(cssPx * getExportScale());
+  }
+
   // ---- Menu collapse (mobile) ----
   document.getElementById('menuToggleBtn').addEventListener('click', () => {
     document.body.classList.toggle('menu-collapsed');
@@ -1327,7 +1353,7 @@
 
   profileSizeRange.addEventListener('input', () => {
     document.getElementById('stage').style.setProperty('--profile-size', profileSizeRange.value + 'px');
-    profileSizeVal.textContent = profileSizeRange.value + 'px';
+    profileSizeVal.textContent = toExportPx(profileSizeRange.value) + 'px';
     rerenderAllSlots();
   });
   outfitColsRange.addEventListener('input', () => {
@@ -1338,10 +1364,14 @@
   });
   outfitHeightRange.addEventListener('input', () => {
     document.getElementById('stage').style.setProperty('--outfit-h', outfitHeightRange.value + 'px');
-    outfitHeightVal.textContent = outfitHeightRange.value + 'px';
+    outfitHeightVal.textContent = toExportPx(outfitHeightRange.value) + 'px';
     rerenderAllSlots();
   });
   applyOutfitCols(); // set the exact column count from the slider
+  // Sync the size-panel px labels to the 2000px export scale on initial load too,
+  // since the input listeners above only run on user interaction.
+  profileSizeVal.textContent = toExportPx(profileSizeRange.value) + 'px';
+  outfitHeightVal.textContent = toExportPx(outfitHeightRange.value) + 'px';
 
   // ---- Layout toggle: profile beside the outfit grid, or on top of it ----
   const layoutEl = document.querySelector('.layout');
@@ -1848,6 +1878,10 @@
       el.style.zIndex = ++stickerZ;
     }
 
+    const bubbleBacker = document.createElement('div');
+    bubbleBacker.className = 'textbox-bubble-backer';
+    el.appendChild(bubbleBacker);
+
     const content = document.createElement('div');
     content.className = 'textbox-content';
     content.contentEditable = 'true';
@@ -1989,18 +2023,25 @@
     const w = stageEl.clientWidth, h = stageEl.clientHeight;
     rulerTop.innerHTML = '';
     rulerLeft.innerHTML = '';
-    for(let x = 0; x <= w; x += 50){
+    const scale = getExportScale();
+    // Step through round 2000px-export values (0, 50, 100, 150px...) and convert
+    // each back to its on-screen position, rather than stepping evenly through
+    // screen px and relabeling — that older approach produced clean-looking but
+    // arbitrary tick spacing with awkward labels like "143px" / "286px" instead
+    // of the round export-pixel values a ruler should actually read.
+    const exportW = w * scale, exportH = h * scale;
+    for(let ex = 0; ex <= exportW; ex += 50){
       const tick = document.createElement('div');
       tick.className = 'ruler-tick';
-      tick.style.left = x + 'px';
-      tick.textContent = x % 100 === 0 ? x : '';
+      tick.style.left = (ex / scale) + 'px';
+      tick.textContent = ex % 100 === 0 ? ex : '';
       rulerTop.appendChild(tick);
     }
-    for(let y = 0; y <= h; y += 50){
+    for(let ey = 0; ey <= exportH; ey += 50){
       const tick = document.createElement('div');
       tick.className = 'ruler-tick';
-      tick.style.top = y + 'px';
-      tick.textContent = y % 100 === 0 ? y : '';
+      tick.style.top = (ey / scale) + 'px';
+      tick.textContent = ey % 100 === 0 ? ey : '';
       rulerLeft.appendChild(tick);
     }
     rulersBuilt = true;
@@ -2018,7 +2059,7 @@
 
     const label = document.createElement('div');
     label.className = 'guide-label';
-    label.textContent = Math.round(pos) + 'px';
+    label.textContent = toExportPx(pos) + 'px';
     el.appendChild(label);
 
     guideLayer.appendChild(el);
@@ -2039,7 +2080,7 @@
       const max = type === 'h' ? stageEl.clientHeight : stageEl.clientWidth;
       livePos = Math.max(0, Math.min(max, livePos));
       if(type === 'h') el.style.top = livePos + 'px'; else el.style.left = livePos + 'px';
-      label.textContent = Math.round(livePos) + 'px';
+      label.textContent = toExportPx(livePos) + 'px';
       e.stopPropagation();
     });
     hit.addEventListener('pointerup', () => { dragging = false; el.classList.remove('guide-dragging'); });
@@ -2058,7 +2099,7 @@
       const max = type === 'h' ? stageEl.clientHeight : stageEl.clientWidth;
       pos = Math.max(0, Math.min(max, pos));
       if(type === 'h') guide.style.top = pos + 'px'; else guide.style.left = pos + 'px';
-      guide.querySelector('.guide-label').textContent = Math.round(pos) + 'px';
+      guide.querySelector('.guide-label').textContent = toExportPx(pos) + 'px';
     };
     const up = (e) => {
       move(e);
@@ -2532,6 +2573,21 @@
         ctx.restore();
       });
 
+      // ctx.textBaseline='middle' centers using the font's full ascent/descent
+      // box (which reserves room for descenders like g/y/p), not the actual
+      // ink of the glyphs being drawn. For digits — which have no descenders —
+      // that box is asymmetric, so 'middle' consistently renders too high, and
+      // a flat "+1px" fudge only happens to look right at one specific size.
+      // Measuring the real rendered ink (actualBoundingBoxAscent/Descent) and
+      // centering on that instead is correct at any font size or scale.
+      function fillTextOpticalCenter(context, text, centerX, centerY){
+        const m = context.measureText(text);
+        const ascent = m.actualBoundingBoxAscent || 0;
+        const descent = m.actualBoundingBoxDescent || 0;
+        context.textBaseline = 'alphabetic';
+        context.fillText(text, centerX, centerY + (ascent - descent) / 2);
+      }
+
       document.querySelectorAll('.item-no').forEach(badge => {
         const r = badge.getBoundingClientRect();
         if(r.width === 0 || r.height === 0) return;
@@ -2550,8 +2606,7 @@
         ctx.fillStyle = cs.color || '#FFFFFF';
         ctx.font = `${cs.fontWeight || '600'} ${fontSize}px ${cs.fontFamily}`;
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(badge.textContent || '', dx + dw / 2, dy + dh / 2 + (1 * scaleFactor));
+        fillTextOpticalCenter(ctx, badge.textContent || '', dx + dw / 2, dy + dh / 2);
         ctx.restore();
       });
 
@@ -2576,8 +2631,7 @@
         ctx.fillStyle = cs.color || '#FFFFFF';
         ctx.font = `${cs.fontWeight || '500'} ${fontSize}px ${cs.fontFamily}`;
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(cap.textContent || '', dx + dw / 2, dy + dh / 2);
+        fillTextOpticalCenter(ctx, cap.textContent || '', dx + dw / 2, dy + dh / 2);
         ctx.restore();
       });
 
