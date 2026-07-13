@@ -2431,7 +2431,11 @@
       // copy of it entirely.
       const captureScale = 3;
       const bigCanvas = await html2canvas(stage, { scale: captureScale, backgroundColor: null, useCORS: true });
-      const targetWidth = Math.round(stageRect.width);
+      // Export at a fixed, higher resolution than the live editing canvas so
+      // downloads come out sharp and roughly 2000px wide, without needing to
+      // shrink the actual editing view (which stays exactly as comfortable
+      // as before) to get there.
+      const targetWidth = 2000;
       const targetHeight = Math.round(bigCanvas.height * (targetWidth / bigCanvas.width));
       const canvas = document.createElement('canvas');
       canvas.width = targetWidth;
