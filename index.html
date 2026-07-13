@@ -1,0 +1,2613 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>룩북 캐릭터 시트 메이커</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --ink:#1E1E1E;
+    --ink-soft:#8A887F;
+    --ink-text:#4A4842;
+    --paper:#FAFAF8;
+    --stage-bg-image:none;
+    --stage-bg-blur:0px;
+    --stage-bg-opacity:1;
+    --bg-pattern:none;
+    --bg-pattern-size:22px 22px;
+    --line:#DEDBD2;
+    --panel-head:#F0EEE7;
+    --panel-head-text:#1E1E1E;
+    --panel-bg:#FFFFFF;
+    --frame:#E4E4E1;
+    --accent:#33465F;
+    --accent-soft:#E7EAF0;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:#EDEBE4;
+    color:var(--ink-text);
+    font-family:'Pretendard', sans-serif;
+    min-height:100vh;
+  }
+
+  /* ---------- Top bar (same collapse pattern as the 네모네모/란트 makers) ---------- */
+  .topbar{
+    display:flex; align-items:center; flex-wrap:wrap; gap:14px; row-gap:12px;
+    padding:16px 32px 16px 76px;
+    border-bottom:1px solid var(--line);
+    background:rgba(255,255,255,.92);
+    backdrop-filter:blur(8px);
+    position:sticky; top:0; z-index:50;
+    max-height:400px;
+    transition:max-height .25s ease, padding-top .2s ease, padding-bottom .2s ease, border-color .2s ease;
+  }
+  body.menu-collapsed .topbar{
+    max-height:0; padding-top:0; padding-bottom:0; overflow:hidden; border-bottom-width:0;
+  }
+  .topbar-toggle-btn{
+    position:fixed; top:19px; left:32px;
+    display:flex; align-items:center; justify-content:center;
+    width:28px; height:28px; border-radius:7px;
+    border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+    cursor:pointer; z-index:60;
+    transition:background .12s ease, color .12s ease;
+  }
+  .topbar-toggle-btn:hover{ background:var(--accent-soft); color:var(--accent); }
+  .topbar-toggle-btn svg{ display:block; transition:transform .2s ease; }
+  body.menu-collapsed .topbar-toggle-btn svg{ transform:rotate(-180deg); }
+  .brand{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; row-gap:6px; }
+  .brand .mark{ font-weight:800; font-size:19px; letter-spacing:-.01em; white-space:nowrap; }
+  .brand .mark span{ color:var(--accent); }
+  .version-badge{
+    font-weight:700; font-size:12px; letter-spacing:.01em; color:var(--accent);
+    background:var(--accent-soft); padding:3px 10px; border-radius:999px; white-space:nowrap;
+  }
+  .actions{ display:flex; flex-wrap:wrap; gap:10px; row-gap:8px; align-items:center; justify-content:flex-end; margin-left:auto; }
+  button.primary{
+    font-family:'Pretendard', sans-serif; font-weight:600; font-size:14px;
+    background:var(--ink); color:#fff; border:none; padding:11px 22px; border-radius:10px;
+    cursor:pointer; white-space:nowrap; box-shadow:0 2px 8px rgba(30,30,30,.18);
+    transition:transform .12s ease, background .12s ease; display:inline-flex; align-items:center; gap:7px;
+  }
+  button.primary:hover{ background:var(--accent); }
+  button.primary:active{ transform:scale(0.97); }
+  button.ghost{
+    font-family:'Pretendard', sans-serif; font-size:13px; font-weight:500;
+    background:transparent; color:var(--ink-soft); border:1px solid var(--line);
+    padding:10px 16px; border-radius:10px; cursor:pointer; white-space:nowrap;
+    transition:border-color .12s ease, color .12s ease; display:inline-flex; align-items:center; gap:7px;
+  }
+  button.ghost:hover{ border-color:var(--accent); color:var(--accent); }
+  button.ghost.active{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  .btn-icon{ flex-shrink:0; }
+  @media (max-width: 860px){
+    .toolbar-btn{ padding:10px; gap:0; }
+    .toolbar-btn .btn-label{ display:none; }
+  }
+
+  /* ---------- Stage ---------- */
+  .stage-wrap{ display:flex; justify-content:safe center; padding:48px 24px 80px; overflow-x:auto; }
+  #stage{
+    width:1400px; flex:0 0 1400px;
+    background-color:var(--paper);
+    background-image:var(--bg-pattern, none);
+    background-size:var(--bg-pattern-size, 22px 22px);
+    padding:52px;
+  }
+  .stage-bg-clip{
+    position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;
+  }
+  .stage-bg-layer{
+    position:absolute;
+    /* oversized beyond the clip box by ~3x the blur radius so the blur has real
+       image pixels to sample near the edge instead of fading toward transparency;
+       at blur:0 this collapses back to inset:0 with no visual change. */
+    inset:calc(var(--stage-bg-blur, 0px) * -3);
+    background-image:var(--stage-bg-image);
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat;
+    filter:blur(var(--stage-bg-blur));
+    opacity:var(--stage-bg-opacity);
+  }
+  .layout{ display:flex; gap:24px; align-items:flex-start; position:relative; z-index:1; }
+
+  /* ---- shared panel chrome ---- */
+  .panel{ border:1px solid var(--ink); border-radius:8px; overflow:hidden; background:var(--panel-bg, #FFFFFF); }
+  .panel-head{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; padding:11px 22px; color:var(--panel-head-text);
+    border-bottom:1px solid var(--panel-head-text); background:var(--panel-head);
+  }
+  .panel-head .item-count{ color:var(--panel-head-text); opacity:.65; text-transform:none; letter-spacing:0; margin-left:6px; }
+
+  /* ---- profile panel ---- */
+  .profile-panel{ width:270px; flex:0 0 270px; }
+  .profile-panel .panel-body{
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+    gap:14px; padding:24px 20px;
+  }
+  /* Always its own vertical stack — regardless of whether panel-body itself
+     is arranged as a column (profile on top of the grid) or a row (profile
+     beside it), the name/tag/description always line-break onto separate
+     lines rather than being laid out as siblings of the row/column switch. */
+  .profile-text{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .p-name{ font-size:21px; font-weight:800; }
+  .p-tag{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); letter-spacing:.02em; }
+  .p-desc{ font-size:12.5px; line-height:1.55; color:var(--ink-text); }
+
+  /* ---- outfit panel ---- */
+  .outfit-panel{ flex:1 1 auto; min-width:0; }
+  .out-grid{
+    display:grid;
+    grid-template-columns:repeat(var(--outfit-cols, 3), 1fr);
+    gap:22px; padding:22px; align-items:start;
+  }
+  .card{ display:flex; flex-direction:column; position:relative; min-width:0; }
+  .card-remove{
+    position:absolute; top:-10px; right:-10px; z-index:6;
+    width:22px; height:22px; border-radius:50%;
+    background:#fff; border:1px solid var(--line); color:var(--ink-soft);
+    display:none; align-items:center; justify-content:center; cursor:pointer; font-size:13px;
+  }
+  .card:hover .card-remove{ display:flex; }
+  .card-remove:hover{ border-color:var(--accent); color:var(--accent); }
+  .item-meta{ margin-top:12px; }
+  .item-label{ font-size:14.5px; font-weight:700; margin-bottom:8px; }
+
+  /* ---- editable text fields (shared) ---- */
+  .editable{ outline:none; cursor:text; border-radius:4px; }
+  .editable:hover, .editable:focus{ background:rgba(51,70,95,.06); box-shadow:0 0 0 3px rgba(51,70,95,.06); }
+  .editable:empty::before{ content:attr(data-default); color:var(--ink-soft); opacity:.55; }
+
+  /* ---- add-item card ---- */
+  .add-item-card{
+    border:1.5px dashed var(--line); border-radius:8px;
+    width:52px; height:52px;
+    justify-self:start; align-self:start;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-soft); cursor:pointer; background:transparent;
+    font-size:22px; font-weight:400; line-height:1;
+    transition:border-color .12s ease, color .12s ease;
+  }
+  .add-item-card:hover{ border-color:var(--accent); color:var(--accent); }
+
+  /* ---------- Image slots (upload + crop), same generic system as the other makers ---------- */
+  .img-slot{
+    position:relative;
+    background:var(--slot, var(--frame));
+    border-radius:4px;
+    overflow:hidden;
+    cursor:pointer;
+    flex:0 0 auto;
+  }
+  .img-slot.square{ width:var(--profile-size, 220px); height:var(--profile-size, 220px); }
+  .img-slot.tall{ width:100%; height:var(--outfit-h, 530px); border:1px solid var(--ink); }
+  .img-slot .placeholder{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:8px;
+    color:var(--ink-soft); text-align:center; font-weight:600; font-size:13px; line-height:1.4;
+    pointer-events:none;
+  }
+  .img-slot .placeholder .plus{
+    width:34px; height:34px; border:2px dashed var(--line); border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:2px;
+  }
+  .img-slot .hover-bar{
+    position:absolute; bottom:0; left:0; right:0;
+    background:rgba(0,0,0,.55); color:#fff; font-size:12px; font-weight:500;
+    padding:8px 0; text-align:center; opacity:0; transition:opacity .15s ease;
+  }
+  .img-slot:hover .hover-bar{ opacity:1; }
+  .img-slot .clear-btn{
+    position:absolute; top:8px; right:8px; width:24px; height:24px; line-height:1; padding-bottom:2px;
+    border-radius:50%; background:rgba(0,0,0,.55); color:#fff; font-size:14px;
+    display:none; align-items:center; justify-content:center; cursor:pointer; z-index:5;
+  }
+  .img-slot.has-img .clear-btn{ display:flex; }
+  .item-no{
+    position:absolute; top:8px; left:8px; z-index:5;
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; font-weight:600;
+    color:#fff; background:rgba(0,0,0,.4); padding:3px 7px; border-radius:3px; letter-spacing:.03em;
+    display:inline-flex; align-items:center; justify-content:center; line-height:1;
+  }
+  /* Nudge just the text down 1px rather than the badge box itself, matching
+     the same optical-centering technique used for the 네모네모 페어틀 badges. */
+  .item-no-text{ pointer-events:none; position:relative; top:1px; }
+  .img-slot .slot-caption{
+    position:absolute; right:4px; bottom:8px; left:auto; z-index:4;
+    max-width:calc(100% - 8px); margin:0; padding:4px 10px;
+    background:rgba(0,0,0,.55); border:none; border-radius:8px; color:#fff;
+    font-family:'Pretendard', sans-serif; font-size:11px; font-weight:500; line-height:15px;
+    text-align:right; white-space:nowrap; overflow:hidden; cursor:text;
+    opacity:0; pointer-events:none; transition:opacity .12s ease, bottom .12s ease;
+  }
+  .img-slot:hover .slot-caption, .img-slot .slot-caption:focus{ bottom:36px; }
+  .img-slot:hover .slot-caption,
+  .img-slot .slot-caption:focus,
+  .img-slot .slot-caption.has-text{
+    opacity:1; pointer-events:auto;
+  }
+  .img-slot .slot-caption:empty::before{ content:attr(data-placeholder); opacity:.75; }
+  body.exporting .img-slot .slot-caption:not(.has-text){ display:none !important; }
+  .img-slot .crop-btn{
+    position:absolute; top:8px; right:38px; z-index:5;
+    background:rgba(0,0,0,.55); color:#fff; font-size:11px; font-weight:600;
+    padding:5px 10px; border-radius:20px; display:none; cursor:pointer;
+  }
+  .img-slot.has-img:hover .crop-btn{ display:flex; }
+  input[type=file]{ display:none; }
+
+  /* ---------- Swatch chips ---------- */
+  .swatch-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .export-empty{ display:none !important; }
+  .swatch{ position:relative; }
+  .swatch-box{
+    width:22px; height:22px; border-radius:50%; border:1px solid rgba(0,0,0,.15);
+    cursor:pointer; position:relative; overflow:hidden;
+  }
+  .swatch-box input[type=color]{ position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .swatch-delete{
+    position:absolute; top:-6px; right:-6px; width:15px; height:15px; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; font-size:9px; line-height:1; display:none;
+    align-items:center; justify-content:center; cursor:pointer; opacity:0; transition:opacity .12s ease;
+  }
+  .swatch:hover .swatch-delete{ display:flex; opacity:1; }
+  .add-swatch-btn{
+    width:22px; height:22px; border-radius:50%; border:1.5px dashed var(--line);
+    background:transparent; color:var(--ink-soft); font-size:13px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:border-color .12s ease, color .12s ease;
+  }
+  .add-swatch-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .item-spec{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--ink-soft); letter-spacing:.01em;
+  }
+
+  /* ---------- Crop overlay ---------- */
+  .crop-overlay{
+    position:fixed; inset:0; background:rgba(20,22,26,.72);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; z-index:1000;
+  }
+  .crop-overlay[hidden]{ display:none; }
+  .crop-stage{
+    position:relative; overflow:hidden; background:#2A2D33; border-radius:8px;
+    box-shadow:0 20px 60px rgba(0,0,0,.4); touch-action:none; cursor:move; user-select:none;
+  }
+  .crop-stage img{
+    position:absolute; top:0; left:0; transform-origin:0 0; pointer-events:none;
+    -webkit-user-drag:none; max-width:none;
+  }
+  .crop-frame{ position:absolute; inset:0; pointer-events:none; border:1.5px solid rgba(255,255,255,.85); border-radius:8px; }
+  .crop-controls{
+    display:flex; align-items:center; gap:16px; background:#fff; padding:14px 20px;
+    border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  .crop-controls .zoom-wrap{ display:flex; align-items:center; gap:10px; font-size:13px; font-weight:600; color:var(--ink-soft); }
+  .crop-controls input[type=range]{ width:180px; }
+  .crop-zoom-val{ min-width:38px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink); }
+  .crop-controls .crop-btn-row{ display:flex; gap:10px; }
+  .crop-apply-btn{
+    font-weight:600; font-size:14px; background:var(--ink); color:#fff; border:none;
+    padding:10px 20px; border-radius:10px; cursor:pointer;
+  }
+  .crop-apply-btn:hover{ background:var(--accent); }
+  .crop-cancel-btn, .crop-reset-btn{
+    font-weight:500; font-size:14px; background:transparent; color:var(--ink-soft);
+    border:1px solid var(--line); padding:10px 18px; border-radius:10px; cursor:pointer;
+  }
+  .crop-reset-btn{ margin-right:auto; }
+  .crop-cancel-btn:hover, .crop-reset-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  @media (max-width: 480px){
+    .crop-overlay{ padding:16px; gap:12px; }
+    .crop-controls{ flex-direction:column; align-items:stretch; width:100%; max-width:340px; gap:10px; padding:12px 14px; }
+    .crop-controls .zoom-wrap{ width:100%; }
+    .crop-controls input[type=range]{ width:auto; flex:1 1 auto; }
+    .crop-controls .crop-btn-row{ width:100%; gap:8px; }
+    .crop-reset-btn, .crop-cancel-btn, .crop-apply-btn{ flex:1 1 0; padding:9px 8px; font-size:12.5px; white-space:nowrap; }
+  }
+
+  /* ---------- Custom touch color picker ---------- */
+  .ccp-overlay{
+    position:fixed; inset:0; background:rgba(28,31,38,.55);
+    display:flex; align-items:center; justify-content:center; z-index:200000; padding:20px;
+  }
+  .ccp-overlay[hidden]{ display:none; }
+  body.exporting .ccp-overlay{ display:none !important; }
+  .ccp-panel{
+    background:#fff; border-radius:16px; padding:20px; width:100%; max-width:300px;
+    box-shadow:0 20px 50px rgba(28,31,38,.3); display:flex; flex-direction:column; gap:14px;
+  }
+  .ccp-title{ font-size:13px; font-weight:700; color:var(--ink-soft); text-align:center; }
+  .ccp-canvas-wrap{ position:relative; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; touch-action:none; border:1px solid var(--line); }
+  .ccp-canvas-wrap canvas{ width:100%; height:100%; display:block; }
+  .ccp-square-thumb{
+    position:absolute; top:0; left:0; width:22px; height:22px; border-radius:50%;
+    border:3px solid #fff; box-shadow:0 0 0 1.5px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.3);
+    transform:translate(-50%,-50%); pointer-events:none;
+  }
+  .ccp-hue-wrap{ position:relative; width:100%; height:30px; border-radius:15px; overflow:hidden; touch-action:none; border:1px solid var(--line); }
+  .ccp-hue-wrap canvas{ width:100%; height:100%; display:block; }
+  .ccp-hue-thumb{
+    position:absolute; top:50%; left:0; width:26px; height:26px; border-radius:50%;
+    border:3px solid #fff; box-shadow:0 0 0 1.5px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.3);
+    transform:translate(-50%,-50%); pointer-events:none; background:transparent;
+  }
+  .ccp-bottom-row{ display:flex; align-items:center; gap:10px; }
+  .ccp-preview{ width:42px; height:42px; border-radius:10px; border:1px solid var(--line); flex:0 0 auto; }
+  .ccp-hex-input{
+    flex:1 1 auto; min-width:0; font-size:16px; font-weight:600; letter-spacing:.02em; text-transform:uppercase;
+    padding:10px 12px; border-radius:10px; border:1px solid var(--line); color:var(--ink-text);
+  }
+  .ccp-hex-input:focus{ outline:none; border-color:var(--accent); }
+  .ccp-actions{ display:flex; gap:10px; }
+  .ccp-actions button{ flex:1 1 0; justify-content:center; }
+
+  /* ---------- Size / color dropdown panels ---------- */
+  .size-settings, .color-settings, .bg-image-settings{ position:relative; }
+  .size-panel, .color-panel{
+    position:fixed; background:#fff; border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 10px 30px rgba(0,0,0,.14); padding:16px 18px; display:flex; flex-direction:column;
+    gap:14px; width:240px; max-width:calc(100vw - 24px); z-index:60;
+  }
+  .size-panel[hidden], .color-panel[hidden]{ display:none; }
+  body.exporting .size-panel, body.exporting .color-panel{ display:none !important; }
+  .size-panel label, .color-panel-row{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .size-panel input[type=range]{ width:100%; }
+  .size-panel .size-val{ font-size:12px; font-weight:500; color:var(--ink-text); align-self:flex-end; }
+  .size-reset-btn{ align-self:stretch; justify-content:center; font-size:12.5px; padding:8px 12px; }
+  .layout-toggle-wrap{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .layout-toggle{ display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .layout-opt{
+    flex:1 1 0; padding:8px 6px; font-size:11.5px; font-weight:600;
+    background:#fff; color:var(--ink-soft); border:none; cursor:pointer;
+    font-family:'Pretendard', sans-serif; transition:background .12s ease, color .12s ease;
+  }
+  .layout-opt + .layout-opt{ border-left:1px solid var(--line); }
+  .layout-opt.active{ background:var(--ink); color:#fff; }
+  .layout-opt:not(.active):hover{ color:var(--accent); }
+
+  /* ---- "profile on top" layout variant (toggled via the layout picker above) ---- */
+  .layout.layout-top{ flex-direction:column; }
+  .layout.layout-top .profile-panel{ width:540px; flex:0 0 auto; align-self:center; }
+  .layout.layout-top .outfit-panel{ width:100%; }
+  .layout.layout-top .profile-panel .panel-body{ flex-direction:row; text-align:left; align-items:center; }
+  .color-panel-row{ flex-direction:row; align-items:center; gap:10px; text-align:left; }
+  .color-panel-row span:nth-child(2){ flex:1 1 auto; }
+  .color-panel-swatch{ width:34px; height:20px; border-radius:6px; border:1px solid var(--line); flex:0 0 auto; cursor:pointer; position:relative; overflow:hidden; }
+  .color-panel-row input[type=color]{ position:absolute; inset:0; width:100%; height:100%; opacity:0; }
+  .color-panel-row.dot-pattern-row{ padding-top:10px; border-top:1px solid var(--line); }
+  .pattern-type-row{
+    display:none; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-top:2px;
+  }
+  .pattern-type-row.visible{ display:flex; }
+  .pattern-type-btn{
+    flex:1; padding:7px 4px; font-size:11.5px; font-weight:600; color:var(--ink-soft);
+    background:#fff; border:none; border-right:1px solid var(--line); cursor:pointer;
+    transition:background .12s ease, color .12s ease;
+  }
+  .pattern-type-btn:last-child{ border-right:none; }
+  .pattern-type-btn:hover{ color:var(--accent); }
+  .pattern-type-btn.active{ background:var(--accent-soft); color:var(--accent); }
+  .toggle-switch{ position:relative; display:inline-block; width:34px; height:20px; flex:0 0 auto; }
+  .toggle-switch input{ position:absolute; opacity:0; width:0; height:0; }
+  .toggle-slider{
+    position:absolute; inset:0; cursor:pointer; background:var(--line);
+    border-radius:999px; transition:background .15s ease;
+  }
+  .toggle-slider::before{
+    content:''; position:absolute; height:14px; width:14px; left:3px; top:3px;
+    background:#fff; border-radius:50%; transition:transform .15s ease; box-shadow:0 1px 2px rgba(0,0,0,.25);
+  }
+  .toggle-switch input:checked + .toggle-slider{ background:var(--accent); }
+  .toggle-switch input:checked + .toggle-slider::before{ transform:translateX(14px); }
+  .color-panel-row.bg-image-row{ padding-top:0; border-top:none; flex-direction:column; align-items:stretch; gap:0; }
+  .bg-image-picker{
+    position:relative; width:100%; height:88px; border-radius:10px;
+    border:1.5px dashed var(--line); background-color:#fff; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    background-size:cover; background-position:center; background-repeat:no-repeat;
+    transition:border-color .12s ease;
+  }
+  .bg-image-picker:hover{ border-color:var(--accent); }
+  .bg-image-picker-empty{
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    color:var(--ink-soft); font-size:12px; font-weight:600; pointer-events:none;
+  }
+  .bg-image-picker.has-image{ border-style:solid; }
+  .bg-image-picker.has-image .bg-image-picker-empty{ display:none; }
+  .bg-image-picker input[type=file]{
+    position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0; display:block;
+  }
+  .bg-image-remove{
+    position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; border:none; padding:0;
+    background:rgba(0,0,0,.6); color:#fff; font-size:13px; line-height:1; cursor:pointer; z-index:2;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* ---------- Stickers (free-floating images) ---------- */
+  #stage{ position:relative; }
+  .sticker{
+    position:absolute;
+    cursor:move;
+    touch-action:none;
+    outline:1.5px dashed transparent;
+    outline-offset:2px;
+    user-select:none;
+    transition:outline-color .12s ease;
+  }
+  .sticker:hover{ outline-color:rgba(51,70,95,.5); }
+  .sticker img{ width:100%; height:100%; display:block; pointer-events:none; -webkit-user-drag:none; }
+  .sticker-delete{
+    position:absolute; top:-11px; right:-11px; width:22px; height:22px;
+    line-height:1; padding-bottom:2px; box-sizing:border-box; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; font-size:13px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:2; opacity:0; pointer-events:none; transition:opacity .12s ease;
+  }
+  .sticker-resize{
+    position:absolute; bottom:-7px; right:-7px; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.3);
+    cursor:se-resize; z-index:2; opacity:0; pointer-events:none; transition:opacity .12s ease;
+  }
+  .sticker-rotate{
+    position:absolute; bottom:-26px; left:50%; transform:translateX(-50%);
+    width:24px; height:24px; border-radius:50%; background:var(--accent);
+    border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.3); color:#fff;
+    display:flex; align-items:center; justify-content:center; cursor:grab;
+    z-index:2; opacity:0; pointer-events:none; transition:opacity .12s ease; touch-action:none;
+  }
+  .sticker-rotate:active{ cursor:grabbing; }
+  .sticker::before{
+    content:''; position:absolute; left:50%; bottom:-26px; width:44px; height:26px;
+    transform:translateX(-50%); pointer-events:auto;
+  }
+  .sticker.locked::before{ pointer-events:none; }
+  .sticker-border-toggle{
+    position:absolute; top:-12px; left:-12px; width:25px; height:25px; line-height:1;
+    border-radius:50%; background:rgba(0,0,0,.6); color:#fff; font-size:12px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:2; opacity:0; pointer-events:none; transition:opacity .12s ease, background .12s ease;
+  }
+  .sticker.has-border .sticker-border-toggle{ background:var(--accent); }
+  .sticker.has-border img{ filter:url(#stickerBorderFilter); }
+  .sticker-lock-btn{
+    position:absolute; top:17px; left:-12px; width:25px; height:25px; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; font-size:12px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease, background .12s ease;
+  }
+  .sticker-back-btn{
+    position:absolute; top:46px; left:-12px; width:25px; height:25px; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; font-size:12px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease, background .12s ease;
+  }
+  .sticker:hover .sticker-delete, .sticker:hover .sticker-resize, .sticker:hover .sticker-rotate,
+  .sticker:hover .sticker-border-toggle, .sticker:hover .sticker-lock-btn, .sticker:hover .sticker-back-btn,
+  .sticker.sticker-active .sticker-delete, .sticker.sticker-active .sticker-resize, .sticker.sticker-active .sticker-rotate,
+  .sticker.sticker-active .sticker-border-toggle, .sticker.sticker-active .sticker-lock-btn, .sticker.sticker-active .sticker-back-btn{
+    opacity:1; pointer-events:auto;
+  }
+  .sticker.locked{ pointer-events:none; }
+  .sticker.locked .sticker-lock-btn{ opacity:1; pointer-events:auto; background:var(--accent); }
+  .sticker.locked .sticker-delete, .sticker.locked .sticker-resize, .sticker.locked .sticker-rotate,
+  .sticker.locked .sticker-border-toggle, .sticker.locked .sticker-back-btn{ display:none; }
+  body.exporting .sticker{ outline:none; }
+  body.exporting .sticker-delete, body.exporting .sticker-resize, body.exporting .sticker-rotate,
+  body.exporting .sticker-border-toggle, body.exporting .sticker-lock-btn, body.exporting .sticker-back-btn{ display:none !important; }
+
+  /* ---------- Text boxes (free-floating editable labels, sticker-like) ---------- */
+  .textbox{
+    position:absolute;
+    touch-action:none;
+    outline:1.5px dashed transparent;
+    outline-offset:2px;
+    transition:outline-color .12s ease;
+    min-width:60px; min-height:32px;
+  }
+  .textbox:hover{ outline-color:rgba(51,70,95,.5); }
+  .textbox::before{
+    /* Invisible bridge over the gap between the box and the icon row above it,
+       so the pointer stays "over" the textbox (keeping controls visible) while
+       travelling from the box up to a button instead of the hover state
+       dropping out mid-way and the buttons vanishing before they're clicked. */
+    content:''; position:absolute; left:0; right:0; top:-34px; height:34px; z-index:2;
+  }
+  .textbox-content{
+    width:100%; height:100%; box-sizing:border-box;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    padding:10px 16px; overflow:hidden; outline:none; cursor:text;
+    font-family:'Pretendard', sans-serif; font-weight:600; line-height:1.35;
+    font-size:16px; color:var(--ink-text); border-radius:10px;
+    transition:box-shadow .12s ease;
+  }
+  .textbox-content:focus{ box-shadow:0 0 0 3px rgba(51,70,95,.12); }
+  .textbox-content:empty::before{ content:'텍스트 입력'; color:var(--ink-soft); opacity:.6; pointer-events:none; }
+  .textbox[data-style="fill"] .textbox-content{ background:#fff; border:1.5px solid var(--ink); }
+  .textbox[data-style="outline"] .textbox-content{ background:transparent; border:1.5px solid var(--ink); }
+  .textbox[data-style="plain"] .textbox-content{ background:transparent; border:none; }
+  .textbox[data-style="tag"] .textbox-content{
+    background:var(--ink); color:#fff; border:none; border-radius:999px;
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; letter-spacing:.04em; text-transform:uppercase;
+  }
+  .textbox[data-style="bubble"] .textbox-content{ background:#fff; border:1px solid var(--ink); border-radius:20px; }
+  .textbox[data-style="postit"] .textbox-content{
+    background:#FFF3B0; color:#4A4842; border:none; border-radius:2px;
+    box-shadow:0 4px 12px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.12);
+    transform:rotate(-2deg);
+  }
+  .textbox-tail-border, .textbox-tail-fill{
+    position:absolute; width:0; height:0; pointer-events:none; display:none; z-index:1;
+    left:50%; transform:translateX(-50%);
+  }
+  .textbox[data-style="bubble"] .textbox-tail-border, .textbox[data-style="bubble"] .textbox-tail-fill{ display:block; }
+  .textbox-tail-border{
+    bottom:-13px;
+    border-left:9px solid transparent; border-right:9px solid transparent;
+    border-top:13px solid var(--ink);
+  }
+  .textbox-tail-fill{
+    bottom:-12px;
+    border-left:8px solid transparent; border-right:8px solid transparent;
+    border-top:12px solid #fff;
+  }
+  body.exporting .textbox-content:empty ~ .textbox-tail-border,
+  body.exporting .textbox-content:empty ~ .textbox-tail-fill{ visibility:hidden; }
+  .textbox-drag-handle{
+    position:absolute; top:-32px; left:0; width:24px; height:24px; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; display:flex; align-items:center; justify-content:center;
+    cursor:move; z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease;
+  }
+  .textbox-delete{
+    position:absolute; top:-32px; left:112px; width:24px; height:24px; line-height:1; padding-bottom:2px;
+    box-sizing:border-box; border-radius:50%; background:rgba(0,0,0,.6); color:#fff; font-size:13px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease;
+  }
+  .textbox-resize{
+    position:absolute; bottom:-7px; right:-7px; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.3);
+    cursor:se-resize; z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease;
+  }
+  .textbox-style-toggle{
+    position:absolute; top:-32px; left:28px; width:24px; height:24px; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; font-size:10.5px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease, background .12s ease;
+  }
+  .textbox-lock-btn{
+    position:absolute; top:-32px; left:56px; width:24px; height:24px; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; font-size:12px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease, background .12s ease;
+  }
+  .textbox-back-btn{
+    position:absolute; top:-32px; left:84px; width:24px; height:24px; border-radius:50%;
+    background:rgba(0,0,0,.6); color:#fff; font-size:12px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    z-index:3; opacity:0; pointer-events:none; transition:opacity .12s ease, background .12s ease;
+  }
+  .textbox:hover .textbox-drag-handle, .textbox:hover .textbox-delete, .textbox:hover .textbox-resize,
+  .textbox:hover .textbox-style-toggle, .textbox:hover .textbox-lock-btn, .textbox:hover .textbox-back-btn,
+  .textbox.textbox-active .textbox-drag-handle, .textbox.textbox-active .textbox-delete, .textbox.textbox-active .textbox-resize,
+  .textbox.textbox-active .textbox-style-toggle, .textbox.textbox-active .textbox-lock-btn, .textbox.textbox-active .textbox-back-btn{
+    opacity:1; pointer-events:auto;
+  }
+  .textbox.locked .textbox-content{ pointer-events:none; }
+  .textbox.locked .textbox-lock-btn{ opacity:1; pointer-events:auto; background:var(--accent); }
+  .textbox.locked .textbox-drag-handle, .textbox.locked .textbox-delete, .textbox.locked .textbox-resize,
+  .textbox.locked .textbox-style-toggle, .textbox.locked .textbox-back-btn{ display:none; }
+  body.exporting .textbox{ outline:none; }
+  body.exporting .textbox-drag-handle, body.exporting .textbox-delete, body.exporting .textbox-resize,
+  body.exporting .textbox-style-toggle, body.exporting .textbox-lock-btn, body.exporting .textbox-back-btn{ display:none !important; }
+  body.exporting .textbox-content:empty{ visibility:hidden; }
+
+  /* ---------- Ruler & alignment guides ---------- */
+  .ruler-top, .ruler-left{ display:none; }
+  body.rulers-on .ruler-top, body.rulers-on .ruler-left{ display:block; }
+  .ruler-top{
+    position:absolute; top:-21px; left:0; right:0; height:20px;
+    background:#fff; border:1px solid var(--line); border-bottom:none;
+    cursor:crosshair; z-index:30; overflow:hidden;
+  }
+  .ruler-left{
+    position:absolute; left:-21px; top:0; bottom:0; width:20px;
+    background:#fff; border:1px solid var(--line); border-right:none;
+    cursor:crosshair; z-index:30; overflow:hidden;
+  }
+  .ruler-tick{
+    position:absolute; font-family:'IBM Plex Mono', monospace; font-size:8px; color:var(--ink-soft);
+    pointer-events:none; white-space:nowrap;
+  }
+  .ruler-top .ruler-tick{ top:0; height:100%; border-left:1px solid var(--line); padding:2px 0 0 2px; }
+  .ruler-left .ruler-tick{ left:0; width:100%; border-top:1px solid var(--line); padding:2px 0 0 2px; writing-mode:vertical-rl; transform:rotate(180deg); }
+  .guide-h, .guide-v{ position:absolute; display:none; z-index:25; }
+  body.rulers-on .guide-h, body.rulers-on .guide-v{ display:block; }
+  #guideLayer{ position:absolute; inset:0; pointer-events:none; z-index:25; }
+  .guide-h{ left:0; right:0; height:0; border-top:1px dashed var(--accent); cursor:ns-resize; }
+  .guide-v{ top:0; bottom:0; width:0; border-left:1px dashed var(--accent); cursor:ew-resize; }
+  .guide-hit{ position:absolute; pointer-events:auto; }
+  .guide-h .guide-hit{ left:0; right:0; top:-5px; height:11px; }
+  .guide-v .guide-hit{ top:0; bottom:0; left:-5px; width:11px; }
+  .guide-label{
+    position:absolute; background:var(--accent); color:#fff; font-family:'IBM Plex Mono', monospace;
+    font-size:9px; padding:1px 5px; border-radius:2px; pointer-events:none; white-space:nowrap; opacity:0;
+    transition:opacity .12s ease;
+  }
+  .guide-h:hover .guide-label, .guide-v:hover .guide-label, .guide-h.guide-dragging .guide-label, .guide-v.guide-dragging .guide-label{ opacity:1; }
+  .guide-h .guide-label{ left:6px; top:-9px; }
+  .guide-v .guide-label{ top:6px; left:4px; }
+  body.exporting .ruler-top, body.exporting .ruler-left, body.exporting .guide-h, body.exporting .guide-v{ display:none !important; }
+
+
+  input[type=file]{ display:none; }
+  body.exporting .clear-btn,
+  body.exporting .crop-btn,
+  body.exporting .card-remove,
+  body.exporting .add-item-card,
+  body.exporting .add-swatch-btn,
+  body.exporting .swatch-delete,
+  body.exporting .hover-bar,
+  body.exporting .editable:hover,
+  body.exporting .editable:focus{
+    display:none !important; background:transparent !important; box-shadow:none !important;
+  }
+
+  @media (max-width: 860px){
+    .topbar{ padding:14px 16px 14px 60px; }
+    .topbar-toggle-btn{ left:16px; top:17px; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute;overflow:hidden">
+  <defs>
+    <filter id="stickerBorderFilter" x="-30%" y="-30%" width="160%" height="160%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="1" result="dilated"/>
+      <feFlood flood-color="#ffffff" flood-opacity="1" result="white"/>
+      <feComposite in="white" in2="dilated" operator="in" result="outline"/>
+      <feMerge>
+        <feMergeNode in="outline"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<button class="topbar-toggle-btn" id="menuToggleBtn" title="메뉴 접기/펼치기">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="mark">룩북<span> 메이커</span></div>
+    <div class="version-badge">ver1.0</div>
+  </div>
+  <div class="actions">
+    <button class="ghost toolbar-btn" id="saveBtn" title="저장"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span class="btn-label">저장</span></button>
+    <button class="ghost toolbar-btn" id="loadBtn" title="불러오기"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Z"/></svg><span class="btn-label">불러오기</span></button>
+    <input type="file" id="loadInput" accept="application/json">
+    <button class="ghost toolbar-btn" id="addStickerBtn" title="스티커 추가"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg><span class="btn-label">스티커 추가</span></button>
+    <input type="file" id="stickerInput" accept="image/*">
+    <button class="ghost toolbar-btn" id="addTextBoxBtn" title="텍스트박스 추가"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg><span class="btn-label">텍스트박스</span></button>
+    <button class="ghost toolbar-btn" id="rulerToggleBtn" title="정렬자"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg><span class="btn-label">정렬자</span></button>
+    <div class="size-settings">
+      <button class="ghost toolbar-btn" id="sizeSettingsBtn" title="이미지 크기"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg><span class="btn-label">이미지 크기</span></button>
+      <div class="size-panel" id="sizePanel" hidden>
+        <label>프로필 이미지 크기
+          <input type="range" id="profileSizeRange" min="120" max="260" step="1" value="220">
+          <span class="size-val" id="profileSizeVal">220px</span>
+        </label>
+        <label>의상 이미지 높이
+          <input type="range" id="outfitHeightRange" min="200" max="650" step="1" value="530">
+          <span class="size-val" id="outfitHeightVal">530px</span>
+        </label>
+        <label>의상 한 줄 표시 개수
+          <input type="range" id="outfitColsRange" min="2" max="4" step="1" value="3">
+          <span class="size-val" id="outfitColsVal">3칸</span>
+        </label>
+        <div class="layout-toggle-wrap">
+          <span>레이아웃</span>
+          <div class="layout-toggle">
+            <button type="button" class="layout-opt active" data-layout="side">프로필 옆에</button>
+            <button type="button" class="layout-opt" data-layout="top">프로필 위에</button>
+          </div>
+        </div>
+        <button type="button" class="ghost size-reset-btn" id="sizeResetBtn">크기 초기화</button>
+      </div>
+    </div>
+    <div class="color-settings">
+      <button class="ghost toolbar-btn" id="colorSettingsBtn" title="색상 조정"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg><span class="btn-label">색상 조정</span></button>
+      <div class="color-panel" id="colorPanel" hidden>
+        <div class="color-panel-row">
+          <div class="color-panel-swatch" style="background:#E4E4E1;"><input type="color" id="profileSlotColor" value="#E4E4E1"></div>
+          <span>프로필 칸 배경색</span>
+        </div>
+        <div class="color-panel-row">
+          <div class="color-panel-swatch" style="background:#E4E4E1;"><input type="color" id="outfitSlotColor" value="#E4E4E1"></div>
+          <span>의상 칸 배경색</span>
+        </div>
+        <div class="color-panel-row">
+          <div class="color-panel-swatch" style="background:#F0EEE7;"><input type="color" id="panelHeadColor" value="#F0EEE7"></div>
+          <span>패널 헤더 색상</span>
+        </div>
+        <div class="color-panel-row">
+          <div class="color-panel-swatch" style="background:#FFFFFF;"><input type="color" id="panelBgColor" value="#FFFFFF"></div>
+          <span>패널 배경색</span>
+        </div>
+        <div class="color-panel-row">
+          <div class="color-panel-swatch" style="background:#FAFAF8;"><input type="color" id="pageColor" value="#FAFAF8"></div>
+          <span>페이지 배경색</span>
+        </div>
+        <div class="color-panel-row dot-pattern-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="dotPatternToggle">
+            <span class="toggle-slider"></span>
+          </label>
+          <span>패턴 배경</span>
+        </div>
+        <div class="pattern-type-row" id="patternTypeRow">
+          <button type="button" class="pattern-type-btn active" data-pattern="dot">도트</button>
+          <button type="button" class="pattern-type-btn" data-pattern="grid">격자무늬</button>
+          <button type="button" class="pattern-type-btn" data-pattern="lines">가로줄</button>
+        </div>
+        <button type="button" class="ghost size-reset-btn" id="colorResetBtn">색상 초기화</button>
+      </div>
+    </div>
+    <div class="bg-image-settings">
+      <button class="ghost toolbar-btn" id="bgImageSettingsBtn" title="배경 이미지"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span class="btn-label">배경 이미지</span></button>
+      <div class="size-panel" id="bgImagePanel" hidden>
+        <div class="color-panel-row bg-image-row">
+          <div class="bg-image-picker" id="bgImageSwatch" title="배경 이미지 선택">
+            <input type="file" id="bgImageInput" accept="image/*">
+            <div class="bg-image-picker-empty">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span>배경 이미지 선택</span>
+            </div>
+            <button type="button" class="bg-image-remove" id="bgImageRemove" title="배경 이미지 제거" hidden>×</button>
+          </div>
+        </div>
+        <label>배경 이미지 흐리기
+          <input type="range" id="bgImageBlurRange" min="0" max="20" step="1" value="0">
+          <span class="size-val" id="bgImageBlurVal">0px</span>
+        </label>
+        <label>배경 이미지 오퍼시티
+          <input type="range" id="bgImageOpacityRange" min="0" max="100" step="1" value="100">
+          <span class="size-val" id="bgImageOpacityVal">100%</span>
+        </label>
+      </div>
+    </div>
+    <button class="ghost toolbar-btn" id="resetBtn" title="초기화"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span class="btn-label">초기화</span></button>
+    <button class="primary toolbar-btn" id="downloadBtn" title="PNG로 다운로드"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span class="btn-label">PNG로 다운로드</span></button>
+  </div>
+</div>
+
+<div class="stage-wrap">
+  <div id="stage">
+    <div class="stage-bg-clip"><div class="stage-bg-layer"></div></div>
+    <div class="ruler-top" id="rulerTop"></div>
+    <div class="ruler-left" id="rulerLeft"></div>
+    <div id="guideLayer"></div>
+    <div class="layout">
+      <div class="panel profile-panel">
+        <div class="panel-head">PROFILE</div>
+        <div class="panel-body">
+          <div class="img-slot square" data-slot="profile" style="--slot:#E4E4E1;">
+            <div class="placeholder"><div class="plus">+</div><div>이미지<br>삽입</div></div>
+            <div class="hover-bar">이미지 변경</div>
+            <div class="crop-btn">크롭</div>
+            <div class="clear-btn" title="이미지 제거"><span>×</span></div>
+            <input type="file" accept="image/*">
+            <div class="slot-caption editable" contenteditable="true" data-placeholder="사진 출처"></div>
+          </div>
+          <div class="profile-text">
+            <div class="editable p-name" contenteditable="true" data-default="캐릭터 이름"></div>
+            <div class="editable p-tag" contenteditable="true" data-default="#키워드 #키워드 #키워드"></div>
+            <div class="editable p-desc" contenteditable="true" data-default="한 줄 소개를 적어보세요."></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel outfit-panel">
+        <div class="panel-head">OUTFIT ARCHIVE <span class="item-count" id="itemCount">· 3 ITEMS</span></div>
+        <div class="out-grid" id="outfitGrid">
+          <div class="card" data-item-card>
+            <button type="button" class="card-remove" title="항목 삭제">×</button>
+            <div class="img-slot tall" data-slot-role="outfit" style="--slot:#E4E4E1;">
+              <span class="item-no"><span class="item-no-text">01</span></span>
+              <div class="placeholder"><div class="plus">+</div><div>이미지<br>삽입</div></div>
+              <div class="hover-bar">이미지 변경</div>
+              <div class="crop-btn">크롭</div>
+              <div class="clear-btn" title="이미지 제거"><span>×</span></div>
+              <input type="file" accept="image/*">
+              <div class="slot-caption editable" contenteditable="true" data-placeholder="사진 출처"></div>
+            </div>
+            <div class="item-meta">
+              <div class="editable item-label" contenteditable="true" data-default="항목 이름"></div>
+              <div class="swatch-row" data-swatch-row>
+                <div class="swatch"><div class="swatch-box" style="background:#EFE6D8;"><input type="color" value="#EFE6D8"></div><div class="swatch-delete">×</div></div>
+                <div class="swatch"><div class="swatch-box" style="background:#B9AF9C;"><input type="color" value="#B9AF9C"></div><div class="swatch-delete">×</div></div>
+                <button type="button" class="add-swatch-btn" title="컬러칩 추가">+</button>
+              </div>
+              <div class="editable item-spec" contenteditable="true" data-default="의상 설명"></div>
+            </div>
+          </div>
+
+          <div class="card" data-item-card>
+            <button type="button" class="card-remove" title="항목 삭제">×</button>
+            <div class="img-slot tall" data-slot-role="outfit" style="--slot:#E4E4E1;">
+              <span class="item-no"><span class="item-no-text">02</span></span>
+              <div class="placeholder"><div class="plus">+</div><div>이미지<br>삽입</div></div>
+              <div class="hover-bar">이미지 변경</div>
+              <div class="crop-btn">크롭</div>
+              <div class="clear-btn" title="이미지 제거"><span>×</span></div>
+              <input type="file" accept="image/*">
+              <div class="slot-caption editable" contenteditable="true" data-placeholder="사진 출처"></div>
+            </div>
+            <div class="item-meta">
+              <div class="editable item-label" contenteditable="true" data-default="항목 이름"></div>
+              <div class="swatch-row" data-swatch-row>
+                <div class="swatch"><div class="swatch-box" style="background:#4A4A52;"><input type="color" value="#4A4A52"></div><div class="swatch-delete">×</div></div>
+                <button type="button" class="add-swatch-btn" title="컬러칩 추가">+</button>
+              </div>
+              <div class="editable item-spec" contenteditable="true" data-default="의상 설명"></div>
+            </div>
+          </div>
+
+          <div class="card" data-item-card>
+            <button type="button" class="card-remove" title="항목 삭제">×</button>
+            <div class="img-slot tall" data-slot-role="outfit" style="--slot:#E4E4E1;">
+              <span class="item-no"><span class="item-no-text">03</span></span>
+              <div class="placeholder"><div class="plus">+</div><div>이미지<br>삽입</div></div>
+              <div class="hover-bar">이미지 변경</div>
+              <div class="crop-btn">크롭</div>
+              <div class="clear-btn" title="이미지 제거"><span>×</span></div>
+              <input type="file" accept="image/*">
+              <div class="slot-caption editable" contenteditable="true" data-placeholder="사진 출처"></div>
+            </div>
+            <div class="item-meta">
+              <div class="editable item-label" contenteditable="true" data-default="항목 이름"></div>
+              <div class="swatch-row" data-swatch-row>
+                <div class="swatch"><div class="swatch-box" style="background:#2E2E2E;"><input type="color" value="#2E2E2E"></div><div class="swatch-delete">×</div></div>
+                <div class="swatch"><div class="swatch-box" style="background:#7C93A6;"><input type="color" value="#7C93A6"></div><div class="swatch-delete">×</div></div>
+                <button type="button" class="add-swatch-btn" title="컬러칩 추가">+</button>
+              </div>
+              <div class="editable item-spec" contenteditable="true" data-default="의상 설명"></div>
+            </div>
+          </div>
+
+          <div class="add-item-card" id="addItemCard" title="항목 추가">+</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="crop-overlay" id="cropOverlay" hidden>
+  <div class="crop-stage" id="cropStage">
+    <img id="cropImage" alt="">
+    <div class="crop-frame"></div>
+  </div>
+  <div class="crop-controls">
+    <div class="zoom-wrap">
+      <span>확대</span>
+      <input type="range" id="cropZoom" min="0.5" max="3.5" step="0.01" value="1">
+      <span class="crop-zoom-val" id="cropZoomVal">100%</span>
+    </div>
+    <div class="crop-btn-row">
+      <button type="button" class="crop-reset-btn" id="cropResetBtn">초기화</button>
+      <button type="button" class="crop-cancel-btn" id="cropCancelBtn">취소</button>
+      <button type="button" class="crop-apply-btn" id="cropApplyBtn">적용</button>
+    </div>
+  </div>
+</div>
+
+<div class="ccp-overlay" id="ccpOverlay" hidden>
+  <div class="ccp-panel">
+    <div class="ccp-title">색상 선택</div>
+    <div class="ccp-canvas-wrap" id="ccpSquareWrap">
+      <canvas id="ccpSquare" width="260" height="260"></canvas>
+      <div class="ccp-square-thumb" id="ccpSquareThumb"></div>
+    </div>
+    <div class="ccp-hue-wrap" id="ccpHueWrap">
+      <canvas id="ccpHue" width="260" height="30"></canvas>
+      <div class="ccp-hue-thumb" id="ccpHueThumb"></div>
+    </div>
+    <div class="ccp-bottom-row">
+      <div class="ccp-preview" id="ccpPreview"></div>
+      <input type="text" class="ccp-hex-input" id="ccpHexInput" maxlength="7" placeholder="#RRGGBB" autocapitalize="characters" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="ccp-actions">
+      <button type="button" class="ghost" id="ccpCancelBtn">취소</button>
+      <button type="button" class="primary" id="ccpApplyBtn">완료</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---- Menu collapse (mobile) ----
+  document.getElementById('menuToggleBtn').addEventListener('click', () => {
+    document.body.classList.toggle('menu-collapsed');
+  });
+
+  // ---- Shared dropdown-panel positioning (size/color panels) ----
+  // Fixed + JS-computed so a wide panel never spills off the left edge on a
+  // narrow phone once the toolbar wraps and pushes its button toward the
+  // right side of the screen.
+  function positionDropdownPanel(panel, btn){
+    const btnRect = btn.getBoundingClientRect();
+    const margin = 12;
+    const panelWidth = panel.getBoundingClientRect().width;
+    const desiredLeft = btnRect.right - panelWidth;
+    const maxLeft = Math.max(margin, window.innerWidth - panelWidth - margin);
+    const left = Math.min(Math.max(desiredLeft, margin), maxLeft);
+    panel.style.top = `${btnRect.bottom + 8}px`;
+    panel.style.left = `${left}px`;
+    panel.style.right = 'auto';
+  }
+
+  // ---- Generic image slot system (upload, crop, clear) ----
+  function setSlotImage(slot, dataUrl, crop){
+    const placeholder = slot.querySelector('.placeholder');
+    const probe = new Image();
+    probe.onload = () => {
+      slot._sourceImage = probe;
+      slot._dataUrl = dataUrl;
+      slot.classList.add('has-img');
+      if(placeholder) placeholder.style.display = 'none';
+      if(crop && typeof crop === 'object'){
+        slot._crop = crop;
+      }else{
+        const boxW = slot.clientWidth;
+        const boxH = slot.clientHeight;
+        const fitsAsIs = probe.naturalWidth <= boxW && probe.naturalHeight <= boxH;
+        slot._crop = fitsAsIs ? { mode: 'original' } : { mode: 'cover' };
+      }
+      renderSlot(slot);
+    };
+    probe.src = dataUrl;
+  }
+
+  function renderSlot(slot){
+    const img = slot._sourceImage;
+    if(!img) return;
+    const boxW = slot.clientWidth;
+    const boxH = slot.clientHeight;
+    const crop = slot._crop || { mode: 'cover' };
+    let photoSize, photoPos;
+    if(crop.mode === 'original'){
+      photoSize = `${img.naturalWidth}px ${img.naturalHeight}px`;
+      photoPos = 'center';
+    }else if(crop.mode === 'custom'){
+      const coverScale = Math.max(boxW / img.naturalWidth, boxH / img.naturalHeight);
+      const drawScale = coverScale * (crop.zoom || 1);
+      const dispW = img.naturalWidth * drawScale;
+      const dispH = img.naturalHeight * drawScale;
+      let posX = boxW / 2 - crop.fx * dispW;
+      let posY = boxH / 2 - crop.fy * dispH;
+      if(dispW >= boxW){ posX = Math.min(0, Math.max(boxW - dispW, posX)); }
+      else{ posX = (boxW - dispW) / 2; }
+      if(dispH >= boxH){ posY = Math.min(0, Math.max(boxH - dispH, posY)); }
+      else{ posY = (boxH - dispH) / 2; }
+      photoSize = `${dispW}px ${dispH}px`;
+      photoPos = `${posX}px ${posY}px`;
+    }else{
+      photoSize = 'cover';
+      photoPos = 'center';
+    }
+    slot.style.backgroundImage = `url(${slot._dataUrl})`;
+    slot.style.backgroundSize = photoSize;
+    slot.style.backgroundPosition = photoPos;
+    slot.style.backgroundRepeat = 'no-repeat';
+  }
+
+  function rerenderAllSlots(){
+    document.querySelectorAll('.img-slot.has-img').forEach(renderSlot);
+  }
+
+  function clearSlotImage(slot){
+    const placeholder = slot.querySelector('.placeholder');
+    const input = slot.querySelector('input[type=file]');
+    slot.style.backgroundImage = '';
+    slot.style.backgroundSize = '';
+    slot.style.backgroundPosition = '';
+    slot.classList.remove('has-img');
+    if(placeholder) placeholder.style.display = 'flex';
+    if(input) input.value = '';
+    slot._sourceImage = null;
+    slot._crop = null;
+    slot._dataUrl = null;
+  }
+
+  function wireImgSlot(slot){
+    if(slot._wired) return;
+    slot._wired = true;
+    const input = slot.querySelector('input[type=file]');
+    const clearBtn = slot.querySelector('.clear-btn');
+    const cropBtn = slot.querySelector('.crop-btn');
+
+    slot.addEventListener('click', (e) => {
+      if(e.target === clearBtn || clearBtn.contains(e.target) || e.target === cropBtn || e.target.closest('.slot-caption')) return;
+      input.click();
+    });
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => setSlotImage(slot, ev.target.result);
+      reader.readAsDataURL(file);
+    });
+    clearBtn.addEventListener('click', (e) => { e.stopPropagation(); clearSlotImage(slot); });
+    cropBtn.addEventListener('click', (e) => { e.stopPropagation(); openCropEditor(slot); });
+    slot.addEventListener('dragover', (e) => e.preventDefault());
+    slot.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if(file && file.type.startsWith('image/')){
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+  document.querySelectorAll('.img-slot').forEach(wireImgSlot);
+
+  // ---- Crop editor ----
+  const cropOverlay = document.getElementById('cropOverlay');
+  const cropStage = document.getElementById('cropStage');
+  const cropImage = document.getElementById('cropImage');
+  const cropZoom = document.getElementById('cropZoom');
+  const cropZoomVal = document.getElementById('cropZoomVal');
+  function updateCropZoomLabel(){ cropZoomVal.textContent = Math.round((cropState.zoom || 1) * 100) + '%'; }
+  let cropTarget = null, cropCoverScale = 1;
+  let cropState = { zoom: 1, x: 0, y: 0 };
+  let cropFrameW = 0, cropFrameH = 0, cropNatW = 0, cropNatH = 0;
+
+  function openCropEditor(slot){
+    if(!slot._sourceImage || !slot._dataUrl) return;
+    cropTarget = slot;
+    cropNatW = slot._sourceImage.naturalWidth;
+    cropNatH = slot._sourceImage.naturalHeight;
+    const boxW = slot.clientWidth, boxH = slot.clientHeight;
+    const ratio = boxW / boxH;
+    const maxW = Math.min(560, window.innerWidth - 60);
+    const controlsReserve = window.innerWidth <= 480 ? 280 : 220;
+    const maxH = Math.min(560, window.innerHeight - controlsReserve);
+    if(maxW / maxH > ratio){ cropFrameH = maxH; cropFrameW = maxH * ratio; }
+    else{ cropFrameW = maxW; cropFrameH = maxW / ratio; }
+    cropStage.style.width = cropFrameW + 'px';
+    cropStage.style.height = cropFrameH + 'px';
+    cropImage.src = slot._dataUrl;
+    cropCoverScale = Math.max(cropFrameW / cropNatW, cropFrameH / cropNatH);
+    cropZoom.min = 0.5;
+    const c = slot._crop;
+    if(c && c.mode === 'custom'){
+      cropState.zoom = c.zoom || 1;
+      const drawScale = cropCoverScale * cropState.zoom;
+      const dispW = cropNatW * drawScale, dispH = cropNatH * drawScale;
+      cropState.x = cropFrameW / 2 - c.fx * dispW;
+      cropState.y = cropFrameH / 2 - c.fy * dispH;
+    }else{
+      cropState.zoom = 1;
+      const dispW = cropNatW * cropCoverScale, dispH = cropNatH * cropCoverScale;
+      cropState.x = (cropFrameW - dispW) / 2;
+      cropState.y = (cropFrameH - dispH) / 2;
+    }
+    cropZoom.value = cropState.zoom;
+    updateCropZoomLabel();
+    clampCrop();
+    applyCropTransform();
+    cropOverlay.hidden = false;
+  }
+  function applyCropTransform(){
+    const drawScale = cropCoverScale * cropState.zoom;
+    cropImage.style.width = (cropNatW * drawScale) + 'px';
+    cropImage.style.height = (cropNatH * drawScale) + 'px';
+    cropImage.style.transform = `translate(${cropState.x}px, ${cropState.y}px)`;
+  }
+  function clampCrop(){
+    const drawScale = cropCoverScale * cropState.zoom;
+    const dispW = cropNatW * drawScale, dispH = cropNatH * drawScale;
+    if(dispW >= cropFrameW){ cropState.x = Math.min(0, Math.max(cropFrameW - dispW, cropState.x)); }
+    else{ cropState.x = (cropFrameW - dispW) / 2; }
+    if(dispH >= cropFrameH){ cropState.y = Math.min(0, Math.max(cropFrameH - dispH, cropState.y)); }
+    else{ cropState.y = (cropFrameH - dispH) / 2; }
+  }
+  cropZoom.addEventListener('input', () => {
+    const oldScale = cropCoverScale * cropState.zoom;
+    const cx = (cropFrameW / 2 - cropState.x) / oldScale;
+    const cy = (cropFrameH / 2 - cropState.y) / oldScale;
+    cropState.zoom = parseFloat(cropZoom.value);
+    const newScale = cropCoverScale * cropState.zoom;
+    cropState.x = cropFrameW / 2 - cx * newScale;
+    cropState.y = cropFrameH / 2 - cy * newScale;
+    clampCrop(); applyCropTransform(); updateCropZoomLabel();
+  });
+  let cropDragging = false, cropStartX = 0, cropStartY = 0, cropOrigX = 0, cropOrigY = 0;
+  cropStage.addEventListener('pointerdown', (e) => {
+    cropDragging = true; cropStartX = e.clientX; cropStartY = e.clientY;
+    cropOrigX = cropState.x; cropOrigY = cropState.y;
+    cropStage.setPointerCapture(e.pointerId);
+  });
+  cropStage.addEventListener('pointermove', (e) => {
+    if(!cropDragging) return;
+    cropState.x = cropOrigX + (e.clientX - cropStartX);
+    cropState.y = cropOrigY + (e.clientY - cropStartY);
+    clampCrop(); applyCropTransform();
+  });
+  cropStage.addEventListener('pointerup', () => { cropDragging = false; });
+  cropStage.addEventListener('pointercancel', () => { cropDragging = false; });
+  function closeCropEditor(){ cropOverlay.hidden = true; cropTarget = null; cropImage.src = ''; }
+  document.getElementById('cropCancelBtn').addEventListener('click', closeCropEditor);
+  document.getElementById('cropResetBtn').addEventListener('click', () => {
+    cropState.zoom = 1;
+    const dispW = cropNatW * cropCoverScale, dispH = cropNatH * cropCoverScale;
+    cropState.x = (cropFrameW - dispW) / 2;
+    cropState.y = (cropFrameH - dispH) / 2;
+    cropZoom.value = 1;
+    updateCropZoomLabel(); clampCrop(); applyCropTransform();
+  });
+  document.getElementById('cropApplyBtn').addEventListener('click', () => {
+    if(!cropTarget) return;
+    const drawScale = cropCoverScale * cropState.zoom;
+    const dispW = cropNatW * drawScale, dispH = cropNatH * drawScale;
+    const fx = (cropFrameW / 2 - cropState.x) / dispW;
+    const fy = (cropFrameH / 2 - cropState.y) / dispH;
+    cropTarget._crop = { mode: 'custom', zoom: cropState.zoom, fx, fy };
+    renderSlot(cropTarget);
+    closeCropEditor();
+  });
+
+  // ---- Editable text fields ----
+  function wireEditableBehavior(el){
+    if(el._editableWired) return;
+    el._editableWired = true;
+    const allowsLineBreak = el.classList.contains('p-desc') || el.classList.contains('item-spec');
+    el.addEventListener('focus', function selectAllOnFirstFocus(){
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }, { once: true });
+    el.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        if(allowsLineBreak){
+          document.execCommand('insertLineBreak');
+        }else{
+          el.blur();
+        }
+      }
+    });
+    el.addEventListener('input', () => {
+      // contenteditable fields often leave a stray <br> (or similar empty
+      // markup) behind after the last character is deleted, which breaks the
+      // :empty CSS match used to show the placeholder guide text — clear it.
+      if(el.textContent.trim() === '' && el.innerHTML !== '') el.innerHTML = '';
+    });
+  }
+  function wireSlotCaption(el){
+    function refresh(){
+      const hasText = el.textContent.trim().length > 0;
+      if(!hasText && el.innerHTML !== '') el.innerHTML = '';
+      el.classList.toggle('has-text', hasText);
+    }
+    refresh();
+    el.addEventListener('input', refresh);
+  }
+  document.querySelectorAll('.editable').forEach(el => {
+    wireEditableBehavior(el);
+    if(el.classList.contains('slot-caption')) wireSlotCaption(el);
+  });
+
+  // ---- Swatch chips (per outfit item) ----
+  function wireSwatchBox(box){
+    if(box._wired) return;
+    box._wired = true;
+    const input = box.querySelector('input[type=color]');
+    input.addEventListener('input', () => { box.style.background = input.value; });
+  }
+  document.querySelectorAll('.swatch-box').forEach(wireSwatchBox);
+
+  function createSwatchChip(hex){
+    const wrap = document.createElement('div');
+    wrap.className = 'swatch';
+    wrap.innerHTML = `<div class="swatch-box" style="background:${hex};"><input type="color" value="${hex}"></div><div class="swatch-delete">×</div>`;
+    wireSwatchBox(wrap.querySelector('.swatch-box'));
+    wrap.querySelector('.swatch-delete').addEventListener('click', () => wrap.remove());
+    return wrap;
+  }
+  function wireSwatchDelete(btn){
+    if(btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener('click', () => btn.closest('.swatch').remove());
+  }
+  document.querySelectorAll('.swatch-delete').forEach(wireSwatchDelete);
+
+  const PRESET_CHIP_COLORS = ['#EFE6D8', '#B9AF9C', '#4A4A52', '#7C93A6', '#C9A98C', '#8B9574'];
+  function wireAddSwatchBtn(btn){
+    if(btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.swatch-row');
+      const existingCount = row.querySelectorAll('.swatch').length;
+      const hex = PRESET_CHIP_COLORS[existingCount % PRESET_CHIP_COLORS.length];
+      row.insertBefore(createSwatchChip(hex), btn);
+    });
+  }
+  document.querySelectorAll('.add-swatch-btn').forEach(wireAddSwatchBtn);
+
+  // ---- Outfit item cards: add / remove / renumber ----
+  const outfitGrid = document.getElementById('outfitGrid');
+  const itemCountEl = document.getElementById('itemCount');
+
+  function renumberItems(){
+    const cards = outfitGrid.querySelectorAll('.card');
+    cards.forEach((card, i) => {
+      const badge = card.querySelector('.item-no-text');
+      if(badge) badge.textContent = String(i + 1).padStart(2, '0');
+    });
+    itemCountEl.textContent = `· ${cards.length} ITEMS`;
+  }
+
+  function wireCard(card){
+    const removeBtn = card.querySelector('.card-remove');
+    removeBtn.addEventListener('click', () => {
+      if(outfitGrid.querySelectorAll('.card').length <= 1) return; // keep at least one item
+      card.remove();
+      renumberItems();
+    });
+    card.querySelectorAll('.img-slot').forEach(wireImgSlot);
+    card.querySelectorAll('.editable').forEach(el => {
+      wireEditableBehavior(el);
+      if(el.classList.contains('slot-caption')) wireSlotCaption(el);
+    });
+    card.querySelectorAll('.swatch-box').forEach(wireSwatchBox);
+    card.querySelectorAll('.swatch-delete').forEach(wireSwatchDelete);
+    card.querySelectorAll('.add-swatch-btn').forEach(wireAddSwatchBtn);
+  }
+  document.querySelectorAll('.card').forEach(wireCard);
+
+  function createOutfitCard(){
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.setAttribute('data-item-card', '');
+    card.innerHTML = `
+      <button type="button" class="card-remove" title="항목 삭제">×</button>
+      <div class="img-slot tall" data-slot-role="outfit" style="--slot:${outfitSlotHex};">
+        <span class="item-no"><span class="item-no-text">00</span></span>
+        <div class="placeholder"><div class="plus">+</div><div>이미지<br>삽입</div></div>
+        <div class="hover-bar">이미지 변경</div>
+        <div class="crop-btn">크롭</div>
+        <div class="clear-btn" title="이미지 제거"><span>×</span></div>
+        <input type="file" accept="image/*">
+        <div class="slot-caption editable" contenteditable="true" data-placeholder="사진 출처"></div>
+      </div>
+      <div class="item-meta">
+        <div class="editable item-label" contenteditable="true" data-default="항목 이름">새 항목</div>
+        <div class="swatch-row" data-swatch-row>
+          <button type="button" class="add-swatch-btn" title="컬러칩 추가">+</button>
+        </div>
+        <div class="editable item-spec" contenteditable="true" data-default="의상 설명"></div>
+      </div>`;
+    wireCard(card);
+    return card;
+  }
+
+  document.getElementById('addItemCard').addEventListener('click', () => {
+    const card = createOutfitCard();
+    outfitGrid.insertBefore(card, document.getElementById('addItemCard'));
+    renumberItems();
+  });
+
+  // ---- Size settings panel ----
+  const sizePanel = document.getElementById('sizePanel');
+  const sizeSettingsBtn = document.getElementById('sizeSettingsBtn');
+  const profileSizeRange = document.getElementById('profileSizeRange');
+  const profileSizeVal = document.getElementById('profileSizeVal');
+  const outfitColsRange = document.getElementById('outfitColsRange');
+  const outfitColsVal = document.getElementById('outfitColsVal');
+  const outfitHeightRange = document.getElementById('outfitHeightRange');
+  const outfitHeightVal = document.getElementById('outfitHeightVal');
+  let desiredOutfitCols = 3;
+
+  // Column count is always exactly what the slider says — no viewport-based capping,
+  // since the stage is a fixed-size canvas that scrolls rather than reflows.
+  function applyOutfitCols(){
+    document.getElementById('stage').style.setProperty('--outfit-cols', desiredOutfitCols);
+  }
+
+  profileSizeRange.addEventListener('input', () => {
+    document.getElementById('stage').style.setProperty('--profile-size', profileSizeRange.value + 'px');
+    profileSizeVal.textContent = profileSizeRange.value + 'px';
+    rerenderAllSlots();
+  });
+  outfitColsRange.addEventListener('input', () => {
+    desiredOutfitCols = parseInt(outfitColsRange.value, 10);
+    outfitColsVal.textContent = desiredOutfitCols + '칸';
+    applyOutfitCols();
+    rerenderAllSlots();
+  });
+  outfitHeightRange.addEventListener('input', () => {
+    document.getElementById('stage').style.setProperty('--outfit-h', outfitHeightRange.value + 'px');
+    outfitHeightVal.textContent = outfitHeightRange.value + 'px';
+    rerenderAllSlots();
+  });
+  applyOutfitCols(); // set the exact column count from the slider
+
+  // ---- Layout toggle: profile beside the outfit grid, or on top of it ----
+  const layoutEl = document.querySelector('.layout');
+  const layoutOpts = document.querySelectorAll('.layout-opt');
+  function setLayoutMode(mode){
+    layoutOpts.forEach(b => b.classList.toggle('active', b.dataset.layout === mode));
+    layoutEl.classList.toggle('layout-top', mode === 'top');
+  }
+  layoutOpts.forEach(btn => {
+    btn.addEventListener('click', () => setLayoutMode(btn.dataset.layout));
+  });
+
+  document.getElementById('sizeResetBtn').addEventListener('click', () => {
+    profileSizeRange.value = 220; outfitColsRange.value = 3; outfitHeightRange.value = 530;
+    profileSizeRange.dispatchEvent(new Event('input'));
+    outfitColsRange.dispatchEvent(new Event('input'));
+    outfitHeightRange.dispatchEvent(new Event('input'));
+    setLayoutMode('side');
+  });
+  sizeSettingsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = sizePanel.hidden;
+    sizePanel.hidden = !sizePanel.hidden;
+    if(opening){ colorPanel.hidden = true; bgImagePanel.hidden = true; positionDropdownPanel(sizePanel, sizeSettingsBtn); }
+  });
+  window.addEventListener('resize', () => {
+    if(!sizePanel.hidden) positionDropdownPanel(sizePanel, sizeSettingsBtn);
+    if(!colorPanel.hidden) positionDropdownPanel(colorPanel, colorSettingsBtn);
+    if(!bgImagePanel.hidden) positionDropdownPanel(bgImagePanel, bgImageSettingsBtn);
+  });
+  document.addEventListener('click', (e) => {
+    if(!sizePanel.hidden && !sizePanel.contains(e.target) && e.target.id !== 'sizeSettingsBtn'){
+      sizePanel.hidden = true;
+    }
+  });
+
+  // ---- Color settings panel ----
+  const colorPanel = document.getElementById('colorPanel');
+  const colorSettingsBtn = document.getElementById('colorSettingsBtn');
+  let outfitSlotHex = '#E4E4E1'; // used as the default --slot for newly-added outfit cards
+
+  function applySwatchColorInput(inputId, apply){
+    const input = document.getElementById(inputId);
+    input.addEventListener('input', () => {
+      input.closest('.color-panel-swatch').style.background = input.value;
+      apply(input.value);
+    });
+  }
+  applySwatchColorInput('profileSlotColor', (hex) => {
+    document.querySelector('.img-slot.square').style.setProperty('--slot', hex);
+  });
+  applySwatchColorInput('outfitSlotColor', (hex) => {
+    outfitSlotHex = hex;
+    document.querySelectorAll('.img-slot.tall').forEach(slot => slot.style.setProperty('--slot', hex));
+  });
+  function getHexBrightness(hex){
+    const m = hex.replace('#', '');
+    const r = parseInt(m.substring(0, 2), 16);
+    const g = parseInt(m.substring(2, 4), 16);
+    const b = parseInt(m.substring(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000;
+  }
+  function getReadableTextColor(hex){
+    return getHexBrightness(hex) < 140 ? '#FFFFFF' : '#1E1E1E';
+  }
+  const dotPatternToggle = document.getElementById('dotPatternToggle');
+  const patternTypeRow = document.getElementById('patternTypeRow');
+  let bgPatternType = 'dot';
+  function applyBgPattern(){
+    patternTypeRow.classList.toggle('visible', dotPatternToggle.checked);
+    if(!dotPatternToggle.checked){
+      document.documentElement.style.setProperty('--bg-pattern', 'none');
+      return;
+    }
+    // Pattern lines/dots pick up the page background's own brightness: a soft
+    // dark-gray mark on light paper, a soft white mark once the paper goes
+    // dark — same white-to-charcoal contrast logic as the panel header text.
+    const hex = document.getElementById('pageColor').value;
+    const dark = getHexBrightness(hex) < 140;
+    const dotColor = dark ? 'rgba(255,255,255,.22)' : 'rgba(30,30,30,.14)';
+    const lineColor = dark ? 'rgba(255,255,255,.16)' : 'rgba(30,30,30,.10)';
+    let image, size;
+    if(bgPatternType === 'grid'){
+      image = `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px)`;
+      size = '24px 24px';
+    }else if(bgPatternType === 'lines'){
+      image = `linear-gradient(to bottom, ${lineColor} 1px, transparent 1px)`;
+      size = '100% 28px';
+    }else{
+      image = `radial-gradient(circle, ${dotColor} 1.2px, transparent 1.2px)`;
+      size = '22px 22px';
+    }
+    document.documentElement.style.setProperty('--bg-pattern', image);
+    document.documentElement.style.setProperty('--bg-pattern-size', size);
+  }
+  dotPatternToggle.addEventListener('change', applyBgPattern);
+  document.querySelectorAll('.pattern-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bgPatternType = btn.dataset.pattern;
+      document.querySelectorAll('.pattern-type-btn').forEach(b => b.classList.toggle('active', b === btn));
+      applyBgPattern();
+    });
+  });
+  applySwatchColorInput('panelHeadColor', (hex) => {
+    document.documentElement.style.setProperty('--panel-head', hex);
+    document.documentElement.style.setProperty('--panel-head-text', getReadableTextColor(hex));
+  });
+  applySwatchColorInput('panelBgColor', (hex) => {
+    document.documentElement.style.setProperty('--panel-bg', hex);
+  });
+  applySwatchColorInput('pageColor', (hex) => {
+    document.documentElement.style.setProperty('--paper', hex);
+    applyBgPattern();
+  });
+
+  const COLOR_DEFAULTS = {
+    profileSlotColor: '#E4E4E1',
+    outfitSlotColor: '#E4E4E1',
+    panelHeadColor: '#F0EEE7',
+    panelBgColor: '#FFFFFF',
+    pageColor: '#FAFAF8'
+  };
+  document.getElementById('colorResetBtn').addEventListener('click', () => {
+    Object.entries(COLOR_DEFAULTS).forEach(([id, hex]) => {
+      const input = document.getElementById(id);
+      input.value = hex;
+      input.dispatchEvent(new Event('input'));
+    });
+    dotPatternToggle.checked = false;
+    bgPatternType = 'dot';
+    document.querySelectorAll('.pattern-type-btn').forEach(b => b.classList.toggle('active', b.dataset.pattern === 'dot'));
+    applyBgPattern();
+  });
+
+  // ---- Background image (own dropdown: select / blur / opacity) ----
+  const bgImagePanel = document.getElementById('bgImagePanel');
+  const bgImageSettingsBtn = document.getElementById('bgImageSettingsBtn');
+  const bgImageSwatch = document.getElementById('bgImageSwatch');
+  const bgImageInput = document.getElementById('bgImageInput');
+  const bgImageRemove = document.getElementById('bgImageRemove');
+  const bgImageBlurRange = document.getElementById('bgImageBlurRange');
+  const bgImageBlurVal = document.getElementById('bgImageBlurVal');
+  const bgImageOpacityRange = document.getElementById('bgImageOpacityRange');
+  const bgImageOpacityVal = document.getElementById('bgImageOpacityVal');
+
+  function setStageBgImage(dataUrl){
+    if(dataUrl){
+      document.documentElement.style.setProperty('--stage-bg-image', `url(${dataUrl})`);
+      bgImageSwatch.style.backgroundImage = `url(${dataUrl})`;
+      bgImageSwatch.classList.add('has-image');
+      bgImageSwatch.dataset.dataUrl = dataUrl;
+      bgImageRemove.hidden = false;
+    }else{
+      document.documentElement.style.setProperty('--stage-bg-image', 'none');
+      bgImageSwatch.style.backgroundImage = '';
+      bgImageSwatch.classList.remove('has-image');
+      delete bgImageSwatch.dataset.dataUrl;
+      bgImageRemove.hidden = true;
+    }
+  }
+  function loadDownscaledImage(file, maxDim, quality){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if(width > maxDim || height > maxDim){
+            if(width >= height){
+              height = Math.round(height * (maxDim / width));
+              width = maxDim;
+            }else{
+              width = Math.round(width * (maxDim / height));
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => reject(new Error('image decode failed'));
+        img.src = ev.target.result;
+      };
+      reader.onerror = () => reject(new Error('file read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+  bgImageInput.addEventListener('change', () => {
+    const file = bgImageInput.files[0];
+    if(!file) return;
+    // Large photos (e.g. straight off a phone) can be many MB at full resolution,
+    // which can be slow or fail outright as a CSS background — downscale to a
+    // sensible max dimension and re-encode as JPEG so it always loads reliably.
+    loadDownscaledImage(file, 1800, 0.85)
+      .then((dataUrl) => setStageBgImage(dataUrl))
+      .catch(() => alert('이미지를 불러오지 못했어요. 다른 이미지로 시도해주세요.'));
+    bgImageInput.value = '';
+  });
+  bgImageRemove.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setStageBgImage(null);
+  });
+  bgImageBlurRange.addEventListener('input', () => {
+    document.documentElement.style.setProperty('--stage-bg-blur', bgImageBlurRange.value + 'px');
+    bgImageBlurVal.textContent = bgImageBlurRange.value + 'px';
+  });
+  bgImageOpacityRange.addEventListener('input', () => {
+    document.documentElement.style.setProperty('--stage-bg-opacity', bgImageOpacityRange.value / 100);
+    bgImageOpacityVal.textContent = bgImageOpacityRange.value + '%';
+  });
+  bgImageSettingsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = bgImagePanel.hidden;
+    bgImagePanel.hidden = !bgImagePanel.hidden;
+    if(opening){ sizePanel.hidden = true; colorPanel.hidden = true; positionDropdownPanel(bgImagePanel, bgImageSettingsBtn); }
+  });
+  document.addEventListener('click', (e) => {
+    if(!bgImagePanel.hidden && !bgImagePanel.contains(e.target) && e.target.id !== 'bgImageSettingsBtn'){
+      bgImagePanel.hidden = true;
+    }
+  });
+
+  colorSettingsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = colorPanel.hidden;
+    colorPanel.hidden = !colorPanel.hidden;
+    if(opening){ sizePanel.hidden = true; bgImagePanel.hidden = true; positionDropdownPanel(colorPanel, colorSettingsBtn); }
+  });
+  document.addEventListener('click', (e) => {
+    if(!colorPanel.hidden && !colorPanel.contains(e.target) && e.target.id !== 'colorSettingsBtn'){
+      colorPanel.hidden = true;
+    }
+  });
+
+  // ---- Stickers (free-floating images) ----
+  const ICON_LOCK_OPEN = '<svg viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 7.6-1.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const ICON_LOCK_CLOSED = '<svg viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const ICON_SEND_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 1 1 0 10H9"/></svg>';
+  const ICON_ROTATE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>';
+
+  let stickerZ = 100;
+
+  function sendStickerToBack(el){
+    const others = Array.from(document.querySelectorAll('.sticker')).filter(s => s !== el);
+    const minZ = others.length ? Math.min(...others.map(s => parseInt(s.style.zIndex) || 0)) : stickerZ;
+    el.style.zIndex = minZ - 1;
+  }
+
+  function createSticker(dataUrl, opts){
+    opts = opts || {};
+    const stage = document.getElementById('stage');
+    const probe = new Image();
+    probe.onload = () => {
+      const maxDim = 180;
+      const scale = Math.min(1, maxDim / Math.max(probe.naturalWidth, probe.naturalHeight));
+      const naturalW = Math.round(probe.naturalWidth * scale);
+      const naturalH = Math.round(probe.naturalHeight * scale);
+      const width = opts.width || naturalW;
+      const height = opts.height || naturalH;
+      const x = opts.x != null ? opts.x : Math.round((stage.clientWidth - width) / 2);
+      const y = opts.y != null ? opts.y : Math.round((stage.clientHeight - height) / 2);
+
+      const el = document.createElement('div');
+      el.className = 'sticker';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.width = width + 'px';
+      el.style.height = height + 'px';
+      if(typeof opts.zIndex === 'number' && !Number.isNaN(opts.zIndex)){
+        el.style.zIndex = opts.zIndex;
+        stickerZ = Math.max(stickerZ, opts.zIndex);
+      }else{
+        el.style.zIndex = ++stickerZ;
+      }
+      el.dataset.dataUrl = dataUrl;
+      const rotation = typeof opts.rotation === 'number' && !Number.isNaN(opts.rotation) ? opts.rotation : 0;
+      el.dataset.rotation = rotation;
+      if(rotation) el.style.transform = 'rotate(' + rotation + 'deg)';
+
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.draggable = false;
+      el.appendChild(img);
+
+      const delBtn = document.createElement('div');
+      delBtn.className = 'sticker-delete';
+      delBtn.title = '스티커 삭제';
+      delBtn.textContent = '\u00d7';
+      delBtn.addEventListener('click', (e) => { e.stopPropagation(); el.remove(); });
+      el.appendChild(delBtn);
+
+      const resizeHandle = document.createElement('div');
+      resizeHandle.className = 'sticker-resize';
+      resizeHandle.title = '드래그해서 크기 조절';
+      el.appendChild(resizeHandle);
+
+      const rotateHandle = document.createElement('div');
+      rotateHandle.className = 'sticker-rotate';
+      rotateHandle.title = '드래그해서 회전 (더블클릭: 초기화)';
+      rotateHandle.innerHTML = ICON_ROTATE;
+      rotateHandle.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        el.dataset.rotation = 0;
+        el.style.transform = 'rotate(0deg)';
+      });
+      el.appendChild(rotateHandle);
+
+      const borderToggle = document.createElement('div');
+      borderToggle.className = 'sticker-border-toggle';
+      borderToggle.title = '흰 테두리 추가/제거';
+      borderToggle.textContent = '\u25cb';
+      borderToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.classList.toggle('has-border');
+      });
+      el.appendChild(borderToggle);
+      if(opts.hasBorder) el.classList.add('has-border');
+
+      const lockBtn = document.createElement('div');
+      lockBtn.className = 'sticker-lock-btn';
+      lockBtn.title = '잠금 (스티커 임시 비활성화)';
+      lockBtn.innerHTML = ICON_LOCK_OPEN;
+      lockBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const locked = el.classList.toggle('locked');
+        lockBtn.innerHTML = locked ? ICON_LOCK_CLOSED : ICON_LOCK_OPEN;
+        lockBtn.title = locked ? '잠금 해제' : '잠금 (스티커 임시 비활성화)';
+      });
+      el.appendChild(lockBtn);
+      if(opts.locked){
+        el.classList.add('locked');
+        lockBtn.innerHTML = ICON_LOCK_CLOSED;
+        lockBtn.title = '잠금 해제';
+      }
+
+      const backBtn = document.createElement('div');
+      backBtn.className = 'sticker-back-btn';
+      backBtn.title = '스티커 순서 뒤로 보내기';
+      backBtn.innerHTML = ICON_SEND_BACK;
+      backBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sendStickerToBack(el);
+      });
+      el.appendChild(backBtn);
+
+      stage.appendChild(el);
+      makeStickerInteractive(el, resizeHandle, rotateHandle);
+    };
+    probe.src = dataUrl;
+  }
+
+  function makeStickerInteractive(el, resizeHandle, rotateHandle){
+    let dragging = false, resizing = false, rotating = false;
+    let startX = 0, startY = 0, startLeft = 0, startTop = 0, startW = 0, startH = 0;
+    let startAngle = 0, startRotation = 0;
+
+    el.addEventListener('pointerdown', (e) => {
+      if(e.target === resizeHandle || e.target.closest('.sticker-delete') || e.target.closest('.sticker-border-toggle') || e.target.closest('.sticker-lock-btn') || e.target.closest('.sticker-back-btn')) return;
+      dragging = true;
+      el.classList.add('sticker-active');
+      el.style.zIndex = ++stickerZ;
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = parseFloat(el.style.left) || 0;
+      startTop = parseFloat(el.style.top) || 0;
+      el.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if(!dragging) return;
+      el.style.left = (startLeft + (e.clientX - startX)) + 'px';
+      el.style.top = (startTop + (e.clientY - startY)) + 'px';
+    });
+    el.addEventListener('pointerup', () => { dragging = false; el.classList.remove('sticker-active'); });
+    el.addEventListener('pointercancel', () => { dragging = false; el.classList.remove('sticker-active'); });
+
+    resizeHandle.addEventListener('pointerdown', (e) => {
+      resizing = true;
+      el.classList.add('sticker-active');
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = el.offsetWidth;
+      startH = el.offsetHeight;
+      resizeHandle.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+    resizeHandle.addEventListener('pointermove', (e) => {
+      if(!resizing) return;
+      const angleRad = ((parseFloat(el.dataset.rotation) || 0) * Math.PI) / 180;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      const localDx = dx * Math.cos(angleRad) + dy * Math.sin(angleRad);
+      const scale = Math.max(0.2, (startW + localDx) / startW);
+      el.style.width = Math.max(30, Math.round(startW * scale)) + 'px';
+      el.style.height = Math.max(30, Math.round(startH * scale)) + 'px';
+      e.stopPropagation();
+    });
+    resizeHandle.addEventListener('pointerup', () => { resizing = false; el.classList.remove('sticker-active'); });
+    resizeHandle.addEventListener('pointercancel', () => { resizing = false; el.classList.remove('sticker-active'); });
+
+    if(rotateHandle){
+      rotateHandle.addEventListener('pointerdown', (e) => {
+        rotating = true;
+        el.classList.add('sticker-active');
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        startAngle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+        startRotation = parseFloat(el.dataset.rotation) || 0;
+        rotateHandle.setPointerCapture(e.pointerId);
+        e.stopPropagation();
+      });
+      rotateHandle.addEventListener('pointermove', (e) => {
+        if(!rotating) return;
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const angle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+        let newRotation = startRotation + (angle - startAngle);
+        if(e.shiftKey) newRotation = Math.round(newRotation / 15) * 15;
+        el.dataset.rotation = newRotation;
+        el.style.transform = 'rotate(' + newRotation + 'deg)';
+        e.stopPropagation();
+      });
+      rotateHandle.addEventListener('pointerup', () => { rotating = false; el.classList.remove('sticker-active'); });
+      rotateHandle.addEventListener('pointercancel', () => { rotating = false; el.classList.remove('sticker-active'); });
+    }
+  }
+
+  document.getElementById('addStickerBtn').addEventListener('click', () => {
+    document.getElementById('stickerInput').click();
+  });
+  document.getElementById('stickerInput').addEventListener('change', () => {
+    const input = document.getElementById('stickerInput');
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => { createSticker(ev.target.result); };
+    reader.readAsDataURL(file);
+    input.value = '';
+  });
+
+  // ---- Text boxes (free-floating editable labels, sticker-like) ----
+  const ICON_MOVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+  const TEXTBOX_STYLES = ['fill', 'outline', 'plain', 'tag', 'bubble', 'postit'];
+
+  function sendFloatingToBack(el){
+    const others = Array.from(document.querySelectorAll('.sticker, .textbox')).filter(s => s !== el);
+    const minZ = others.length ? Math.min(...others.map(s => parseInt(s.style.zIndex) || 0)) : stickerZ;
+    el.style.zIndex = minZ - 1;
+  }
+
+  function autosizeTextBox(el, content){
+    const prevHeight = content.style.height;
+    content.style.height = 'auto';
+    const needed = content.scrollHeight;
+    content.style.height = prevHeight;
+    const minH = 32;
+    const newH = Math.max(minH, needed);
+    if(Math.abs(newH - el.offsetHeight) > 1){
+      el.style.height = newH + 'px';
+    }
+  }
+
+  function createTextBox(opts){
+    opts = opts || {};
+    const stage = document.getElementById('stage');
+    const width = opts.width || 220;
+    const height = opts.height || 70;
+    const x = opts.x != null ? opts.x : Math.round((stage.clientWidth - width) / 2);
+    const y = opts.y != null ? opts.y : Math.round((stage.clientHeight - height) / 2);
+
+    const el = document.createElement('div');
+    el.className = 'textbox';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = width + 'px';
+    el.style.height = height + 'px';
+    el.dataset.style = TEXTBOX_STYLES.includes(opts.style) ? opts.style : 'fill';
+    if(typeof opts.zIndex === 'number' && !Number.isNaN(opts.zIndex)){
+      el.style.zIndex = opts.zIndex;
+      stickerZ = Math.max(stickerZ, opts.zIndex);
+    }else{
+      el.style.zIndex = ++stickerZ;
+    }
+
+    const content = document.createElement('div');
+    content.className = 'textbox-content';
+    content.contentEditable = 'true';
+    content.innerHTML = opts.text || '';
+    el.appendChild(content);
+    content.addEventListener('input', () => autosizeTextBox(el, content));
+
+    const tailBorder = document.createElement('div');
+    tailBorder.className = 'textbox-tail-border';
+    el.appendChild(tailBorder);
+    const tailFill = document.createElement('div');
+    tailFill.className = 'textbox-tail-fill';
+    el.appendChild(tailFill);
+
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'textbox-drag-handle';
+    dragHandle.title = '드래그해서 이동';
+    dragHandle.innerHTML = ICON_MOVE;
+    el.appendChild(dragHandle);
+
+    const delBtn = document.createElement('div');
+    delBtn.className = 'textbox-delete';
+    delBtn.title = '텍스트박스 삭제';
+    delBtn.textContent = '\u00d7';
+    delBtn.addEventListener('click', (e) => { e.stopPropagation(); el.remove(); });
+    el.appendChild(delBtn);
+
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'textbox-resize';
+    resizeHandle.title = '드래그해서 크기 조절';
+    el.appendChild(resizeHandle);
+
+    const styleToggle = document.createElement('div');
+    styleToggle.className = 'textbox-style-toggle';
+    styleToggle.title = '스타일 변경';
+    styleToggle.textContent = 'Aa';
+    styleToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = TEXTBOX_STYLES.indexOf(el.dataset.style);
+      el.dataset.style = TEXTBOX_STYLES[(idx + 1) % TEXTBOX_STYLES.length];
+      autosizeTextBox(el, content);
+    });
+    el.appendChild(styleToggle);
+
+    const lockBtn = document.createElement('div');
+    lockBtn.className = 'textbox-lock-btn';
+    lockBtn.title = '잠금 (텍스트박스 임시 비활성화)';
+    lockBtn.innerHTML = ICON_LOCK_OPEN;
+    lockBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const locked = el.classList.toggle('locked');
+      lockBtn.innerHTML = locked ? ICON_LOCK_CLOSED : ICON_LOCK_OPEN;
+      lockBtn.title = locked ? '잠금 해제' : '잠금 (텍스트박스 임시 비활성화)';
+    });
+    el.appendChild(lockBtn);
+    if(opts.locked){
+      el.classList.add('locked');
+      lockBtn.innerHTML = ICON_LOCK_CLOSED;
+      lockBtn.title = '잠금 해제';
+    }
+
+    const backBtn = document.createElement('div');
+    backBtn.className = 'textbox-back-btn';
+    backBtn.title = '순서 뒤로 보내기';
+    backBtn.innerHTML = ICON_SEND_BACK;
+    backBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sendFloatingToBack(el);
+    });
+    el.appendChild(backBtn);
+
+    stage.appendChild(el);
+    makeTextBoxInteractive(el, dragHandle, resizeHandle, content);
+    if(opts.text) autosizeTextBox(el, content);
+    return el;
+  }
+
+  function makeTextBoxInteractive(el, dragHandle, resizeHandle, content){
+    let dragging = false, resizing = false;
+    let startX = 0, startY = 0, startLeft = 0, startTop = 0, startW = 0, startH = 0;
+
+    dragHandle.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      el.classList.add('textbox-active');
+      el.style.zIndex = ++stickerZ;
+      startX = e.clientX; startY = e.clientY;
+      startLeft = parseFloat(el.style.left) || 0;
+      startTop = parseFloat(el.style.top) || 0;
+      dragHandle.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+    dragHandle.addEventListener('pointermove', (e) => {
+      if(!dragging) return;
+      el.style.left = (startLeft + (e.clientX - startX)) + 'px';
+      el.style.top = (startTop + (e.clientY - startY)) + 'px';
+    });
+    dragHandle.addEventListener('pointerup', () => { dragging = false; el.classList.remove('textbox-active'); });
+    dragHandle.addEventListener('pointercancel', () => { dragging = false; el.classList.remove('textbox-active'); });
+
+    resizeHandle.addEventListener('pointerdown', (e) => {
+      resizing = true;
+      el.classList.add('textbox-active');
+      startX = e.clientX; startY = e.clientY;
+      startW = el.offsetWidth; startH = el.offsetHeight;
+      resizeHandle.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+    resizeHandle.addEventListener('pointermove', (e) => {
+      if(!resizing) return;
+      el.style.width = Math.max(60, Math.round(startW + (e.clientX - startX))) + 'px';
+      el.style.height = Math.max(32, Math.round(startH + (e.clientY - startY))) + 'px';
+      e.stopPropagation();
+    });
+    resizeHandle.addEventListener('pointerup', () => { resizing = false; el.classList.remove('textbox-active'); });
+    resizeHandle.addEventListener('pointercancel', () => { resizing = false; el.classList.remove('textbox-active'); });
+
+    content.addEventListener('pointerdown', (e) => {
+      el.style.zIndex = ++stickerZ;
+      e.stopPropagation();
+    });
+    content.addEventListener('focus', () => el.classList.add('textbox-active'));
+    content.addEventListener('blur', () => el.classList.remove('textbox-active'));
+  }
+
+  document.getElementById('addTextBoxBtn').addEventListener('click', () => {
+    const el = createTextBox({});
+    el.querySelector('.textbox-content').focus();
+  });
+
+  // ---- Ruler & alignment guides ----
+  const rulerToggleBtn = document.getElementById('rulerToggleBtn');
+  const rulerTop = document.getElementById('rulerTop');
+  const rulerLeft = document.getElementById('rulerLeft');
+  const guideLayer = document.getElementById('guideLayer');
+  let rulersBuilt = false;
+
+  function buildRulerTicks(){
+    const stageEl = document.getElementById('stage');
+    const w = stageEl.clientWidth, h = stageEl.clientHeight;
+    rulerTop.innerHTML = '';
+    rulerLeft.innerHTML = '';
+    for(let x = 0; x <= w; x += 50){
+      const tick = document.createElement('div');
+      tick.className = 'ruler-tick';
+      tick.style.left = x + 'px';
+      tick.textContent = x % 100 === 0 ? x : '';
+      rulerTop.appendChild(tick);
+    }
+    for(let y = 0; y <= h; y += 50){
+      const tick = document.createElement('div');
+      tick.className = 'ruler-tick';
+      tick.style.top = y + 'px';
+      tick.textContent = y % 100 === 0 ? y : '';
+      rulerLeft.appendChild(tick);
+    }
+    rulersBuilt = true;
+  }
+
+  function createGuide(type, pos){
+    const stageEl = document.getElementById('stage');
+    const el = document.createElement('div');
+    el.className = type === 'h' ? 'guide-h' : 'guide-v';
+    if(type === 'h') el.style.top = pos + 'px'; else el.style.left = pos + 'px';
+
+    const hit = document.createElement('div');
+    hit.className = 'guide-hit';
+    el.appendChild(hit);
+
+    const label = document.createElement('div');
+    label.className = 'guide-label';
+    label.textContent = Math.round(pos) + 'px';
+    el.appendChild(label);
+
+    guideLayer.appendChild(el);
+
+    let dragging = false, startClient = 0, startPos = 0;
+    hit.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      el.classList.add('guide-dragging');
+      startClient = type === 'h' ? e.clientY : e.clientX;
+      startPos = type === 'h' ? (parseFloat(el.style.top) || 0) : (parseFloat(el.style.left) || 0);
+      hit.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+    hit.addEventListener('pointermove', (e) => {
+      if(!dragging) return;
+      const client = type === 'h' ? e.clientY : e.clientX;
+      let livePos = startPos + (client - startClient);
+      const max = type === 'h' ? stageEl.clientHeight : stageEl.clientWidth;
+      livePos = Math.max(0, Math.min(max, livePos));
+      if(type === 'h') el.style.top = livePos + 'px'; else el.style.left = livePos + 'px';
+      label.textContent = Math.round(livePos) + 'px';
+      e.stopPropagation();
+    });
+    hit.addEventListener('pointerup', () => { dragging = false; el.classList.remove('guide-dragging'); });
+    hit.addEventListener('pointercancel', () => { dragging = false; el.classList.remove('guide-dragging'); });
+    hit.addEventListener('dblclick', (e) => { e.stopPropagation(); el.remove(); });
+    return el;
+  }
+
+  function startGuideDrag(type, startEvent){
+    const stageEl = document.getElementById('stage');
+    const guide = createGuide(type, 0);
+    guide.classList.add('guide-dragging');
+    const move = (e) => {
+      const r = stageEl.getBoundingClientRect();
+      let pos = type === 'h' ? (e.clientY - r.top) : (e.clientX - r.left);
+      const max = type === 'h' ? stageEl.clientHeight : stageEl.clientWidth;
+      pos = Math.max(0, Math.min(max, pos));
+      if(type === 'h') guide.style.top = pos + 'px'; else guide.style.left = pos + 'px';
+      guide.querySelector('.guide-label').textContent = Math.round(pos) + 'px';
+    };
+    const up = (e) => {
+      move(e);
+      guide.classList.remove('guide-dragging');
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    move(startEvent);
+  }
+  rulerTop.addEventListener('pointerdown', (e) => { startGuideDrag('h', e); });
+  rulerLeft.addEventListener('pointerdown', (e) => { startGuideDrag('v', e); });
+
+  rulerToggleBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('rulers-on');
+    rulerToggleBtn.classList.toggle('active', on);
+    if(on && !rulersBuilt) buildRulerTicks();
+  });
+  window.addEventListener('resize', () => { if(document.body.classList.contains('rulers-on')) buildRulerTicks(); });
+
+  // ---- Save / Load (JSON) ----
+  function serializeState(){
+    const cards = [...outfitGrid.querySelectorAll('.card')].map(card => {
+      const slot = card.querySelector('.img-slot');
+      return {
+        label: card.querySelector('.item-label').innerHTML,
+        spec: card.querySelector('.item-spec').innerHTML,
+        caption: card.querySelector('.slot-caption').innerHTML,
+        image: slot._dataUrl || null,
+        crop: slot._crop || null,
+        swatches: [...card.querySelectorAll('.swatch-box input[type=color]')].map(i => i.value)
+      };
+    });
+    const profileSlot = document.querySelector('.img-slot.square');
+    return {
+      version: 1,
+      profile: {
+        name: document.querySelector('.p-name').innerHTML,
+        tag: document.querySelector('.p-tag').innerHTML,
+        desc: document.querySelector('.p-desc').innerHTML,
+        caption: document.querySelector('.profile-panel .slot-caption').innerHTML,
+        image: profileSlot._dataUrl || null,
+        crop: profileSlot._crop || null
+      },
+      items: cards,
+      stickers: Array.from(document.querySelectorAll('.sticker')).map(el => ({
+        dataUrl: el.dataset.dataUrl,
+        x: parseFloat(el.style.left) || 0,
+        y: parseFloat(el.style.top) || 0,
+        width: parseFloat(el.style.width) || 0,
+        height: parseFloat(el.style.height) || 0,
+        hasBorder: el.classList.contains('has-border'),
+        locked: el.classList.contains('locked'),
+        zIndex: parseInt(el.style.zIndex) || 0,
+        rotation: parseFloat(el.dataset.rotation) || 0
+      })),
+      textboxes: Array.from(document.querySelectorAll('.textbox')).map(el => ({
+        text: el.querySelector('.textbox-content').innerHTML,
+        style: el.dataset.style,
+        x: parseFloat(el.style.left) || 0,
+        y: parseFloat(el.style.top) || 0,
+        width: parseFloat(el.style.width) || 0,
+        height: parseFloat(el.style.height) || 0,
+        locked: el.classList.contains('locked'),
+        zIndex: parseInt(el.style.zIndex) || 0
+      })),
+      sizes: { profileSize: profileSizeRange.value, outfitCols: outfitColsRange.value, outfitHeight: outfitHeightRange.value, layout: layoutEl.classList.contains('layout-top') ? 'top' : 'side' },
+      colors: {
+        profileSlot: document.getElementById('profileSlotColor').value,
+        outfitSlot: document.getElementById('outfitSlotColor').value,
+        panelHead: document.getElementById('panelHeadColor').value,
+        panelBg: document.getElementById('panelBgColor').value,
+        page: document.getElementById('pageColor').value
+      },
+      bgImage: document.getElementById('bgImageSwatch').dataset.dataUrl || null,
+      bgImageBlur: document.getElementById('bgImageBlurRange').value,
+      bgImageOpacity: document.getElementById('bgImageOpacityRange').value,
+      dotPattern: dotPatternToggle.checked,
+      bgPatternType: bgPatternType
+    };
+  }
+
+  function applyState(data){
+    document.querySelector('.p-name').innerHTML = data.profile.name || '';
+    document.querySelector('.p-tag').innerHTML = data.profile.tag || '';
+    document.querySelector('.p-desc').innerHTML = data.profile.desc || '';
+    document.querySelector('.profile-panel .slot-caption').innerHTML = data.profile.caption || '';
+    wireSlotCaption(document.querySelector('.profile-panel .slot-caption'));
+    const profileSlot = document.querySelector('.img-slot.square');
+    clearSlotImage(profileSlot);
+    if(data.profile.image) setSlotImage(profileSlot, data.profile.image, data.profile.crop);
+
+    outfitGrid.querySelectorAll('.card').forEach(c => c.remove());
+    const addBtn = document.getElementById('addItemCard');
+    (data.items || []).forEach(itemData => {
+      const card = createOutfitCard();
+      outfitGrid.insertBefore(card, addBtn);
+      card.querySelector('.item-label').innerHTML = itemData.label || '';
+      card.querySelector('.item-spec').innerHTML = itemData.spec || '';
+      card.querySelector('.slot-caption').innerHTML = itemData.caption || '';
+      wireSlotCaption(card.querySelector('.slot-caption'));
+      const row = card.querySelector('.swatch-row');
+      const abtn = row.querySelector('.add-swatch-btn');
+      (itemData.swatches || []).forEach(hex => row.insertBefore(createSwatchChip(hex), abtn));
+      const slot = card.querySelector('.img-slot');
+      if(itemData.image) setSlotImage(slot, itemData.image, itemData.crop);
+    });
+    renumberItems();
+
+    document.querySelectorAll('.sticker').forEach(el => el.remove());
+    if(Array.isArray(data.stickers)){
+      data.stickers.forEach(s => {
+        if(s && s.dataUrl){
+          createSticker(s.dataUrl, { x: s.x, y: s.y, width: s.width, height: s.height, hasBorder: !!s.hasBorder, locked: !!s.locked, zIndex: s.zIndex, rotation: typeof s.rotation === 'number' ? s.rotation : 0 });
+        }
+      });
+    }
+
+    document.querySelectorAll('.textbox').forEach(el => el.remove());
+    if(Array.isArray(data.textboxes)){
+      data.textboxes.forEach(t => {
+        if(t){
+          createTextBox({ text: t.text, style: t.style, x: t.x, y: t.y, width: t.width, height: t.height, locked: !!t.locked, zIndex: t.zIndex });
+        }
+      });
+    }
+
+    // Guides are a temporary editing aid, not part of the saved sheet — clear them on load/reset.
+    guideLayer.innerHTML = '';
+
+    if(data.sizes){
+      profileSizeRange.value = data.sizes.profileSize || 220;
+      outfitColsRange.value = data.sizes.outfitCols || 3;
+      outfitHeightRange.value = data.sizes.outfitHeight || 530;
+      profileSizeRange.dispatchEvent(new Event('input'));
+      outfitColsRange.dispatchEvent(new Event('input'));
+      outfitHeightRange.dispatchEvent(new Event('input'));
+      setLayoutMode(data.sizes.layout === 'top' ? 'top' : 'side');
+    }
+    if(data.colors){
+      const setC = (id, hex) => { const el = document.getElementById(id); el.value = hex; el.dispatchEvent(new Event('input')); };
+      if(data.colors.profileSlot) setC('profileSlotColor', data.colors.profileSlot);
+      if(data.colors.outfitSlot) setC('outfitSlotColor', data.colors.outfitSlot);
+      if(data.colors.panelHead) setC('panelHeadColor', data.colors.panelHead);
+      if(data.colors.panelBg) setC('panelBgColor', data.colors.panelBg);
+      if(data.colors.page) setC('pageColor', data.colors.page);
+    }
+    setStageBgImage(data.bgImage || null);
+    bgImageBlurRange.value = data.bgImageBlur != null ? data.bgImageBlur : 0;
+    bgImageBlurRange.dispatchEvent(new Event('input'));
+    bgImageOpacityRange.value = data.bgImageOpacity != null ? data.bgImageOpacity : 100;
+    bgImageOpacityRange.dispatchEvent(new Event('input'));
+    dotPatternToggle.checked = !!data.dotPattern;
+    bgPatternType = ['dot', 'grid', 'lines'].includes(data.bgPatternType) ? data.bgPatternType : 'dot';
+    document.querySelectorAll('.pattern-type-btn').forEach(b => b.classList.toggle('active', b.dataset.pattern === bgPatternType));
+    applyBgPattern();
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const data = serializeState();
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const nameText = document.querySelector('.p-name').textContent.trim() || '캐릭터';
+    link.download = `${nameText}_룩북.json`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+  const loadInput = document.getElementById('loadInput');
+  document.getElementById('loadBtn').addEventListener('click', () => loadInput.click());
+  loadInput.addEventListener('change', () => {
+    const file = loadInput.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try{
+        const data = JSON.parse(ev.target.result);
+        applyState(data);
+      }catch(err){
+        alert('파일을 불러오는 중 문제가 발생했습니다. 올바른 룩북 저장 파일인지 확인해주세요.');
+        console.error(err);
+      }finally{
+        loadInput.value = '';
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // ---- Reset ----
+  const INITIAL_STATE = serializeState();
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if(!confirm('모든 내용을 초기 상태로 되돌릴까요? 되돌리기는 할 수 없습니다.')) return;
+    applyState(INITIAL_STATE);
+  });
+
+  // ---- Custom touch-friendly color picker ----
+  (function setupCustomColorPicker(){
+    const overlay = document.getElementById('ccpOverlay');
+    if(!overlay) return;
+    const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+    const squareCanvas = document.getElementById('ccpSquare');
+    const squareThumb = document.getElementById('ccpSquareThumb');
+    const squareWrap = document.getElementById('ccpSquareWrap');
+    const hueCanvas = document.getElementById('ccpHue');
+    const hueThumb = document.getElementById('ccpHueThumb');
+    const hueWrap = document.getElementById('ccpHueWrap');
+    const preview = document.getElementById('ccpPreview');
+    const hexInput = document.getElementById('ccpHexInput');
+    const cancelBtn = document.getElementById('ccpCancelBtn');
+    const applyBtn = document.getElementById('ccpApplyBtn');
+    const sqCtx = squareCanvas.getContext('2d');
+    const hueCtx = hueCanvas.getContext('2d');
+    let hue = 0, sat = 0, val = 0;
+    let activeInput = null, draggingSquare = false, draggingHue = false;
+
+    function hsvToHex(h, s, v){
+      const c = v * s;
+      const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+      const m = v - c;
+      let r=0,g=0,b=0;
+      if(h < 60){ r=c; g=x; b=0; } else if(h < 120){ r=x; g=c; b=0; }
+      else if(h < 180){ r=0; g=c; b=x; } else if(h < 240){ r=0; g=x; b=c; }
+      else if(h < 300){ r=x; g=0; b=c; } else { r=c; g=0; b=x; }
+      const toHex = n => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+    }
+    function hexToHsv(hex){
+      hex = (hex || '#000000').replace('#', '');
+      if(hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+      if(hex.length !== 6) hex = '000000';
+      const r = parseInt(hex.substring(0,2),16)/255, g = parseInt(hex.substring(2,4),16)/255, b = parseInt(hex.substring(4,6),16)/255;
+      const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+      let h = 0;
+      if(d !== 0){
+        if(max === r) h = 60 * (((g-b)/d) % 6);
+        else if(max === g) h = 60 * ((b-r)/d + 2);
+        else h = 60 * ((r-g)/d + 4);
+      }
+      if(h < 0) h += 360;
+      const s = max === 0 ? 0 : d / max;
+      return { h, s, v: max };
+    }
+    function drawHueBar(){
+      const w = hueCanvas.width, h = hueCanvas.height;
+      const grad = hueCtx.createLinearGradient(0,0,w,0);
+      for(let i=0;i<=6;i++) grad.addColorStop(i/6, `hsl(${i*60},100%,50%)`);
+      hueCtx.fillStyle = grad; hueCtx.fillRect(0,0,w,h);
+    }
+    function drawSquare(){
+      const w = squareCanvas.width, h = squareCanvas.height;
+      sqCtx.fillStyle = hsvToHex(hue,1,1); sqCtx.fillRect(0,0,w,h);
+      const wg = sqCtx.createLinearGradient(0,0,w,0);
+      wg.addColorStop(0,'rgba(255,255,255,1)'); wg.addColorStop(1,'rgba(255,255,255,0)');
+      sqCtx.fillStyle = wg; sqCtx.fillRect(0,0,w,h);
+      const bg = sqCtx.createLinearGradient(0,0,0,h);
+      bg.addColorStop(0,'rgba(0,0,0,0)'); bg.addColorStop(1,'rgba(0,0,0,1)');
+      sqCtx.fillStyle = bg; sqCtx.fillRect(0,0,w,h);
+    }
+    function updateThumbs(){
+      const sr = squareWrap.getBoundingClientRect();
+      squareThumb.style.left = `${sat*sr.width}px`;
+      squareThumb.style.top = `${(1-val)*sr.height}px`;
+      const hr = hueWrap.getBoundingClientRect();
+      hueThumb.style.left = `${(hue/360)*hr.width}px`;
+    }
+    function updatePreview(){
+      const hex = hsvToHex(hue,sat,val);
+      preview.style.background = hex; hexInput.value = hex;
+    }
+    function refreshAll(){ drawHueBar(); drawSquare(); updateThumbs(); updatePreview(); }
+    function pointFromEvent(e, rect){
+      return { x: Math.min(Math.max(e.clientX-rect.left,0),rect.width), y: Math.min(Math.max(e.clientY-rect.top,0),rect.height) };
+    }
+    function handleSquarePointer(e){
+      const rect = squareWrap.getBoundingClientRect();
+      const p = pointFromEvent(e, rect);
+      sat = rect.width === 0 ? 0 : p.x/rect.width;
+      val = rect.height === 0 ? 0 : 1 - (p.y/rect.height);
+      updateThumbs(); updatePreview();
+    }
+    function handleHuePointer(e){
+      const rect = hueWrap.getBoundingClientRect();
+      const p = pointFromEvent(e, rect);
+      hue = rect.width === 0 ? 0 : (p.x/rect.width)*360;
+      drawSquare(); updateThumbs(); updatePreview();
+    }
+    squareWrap.addEventListener('pointerdown', (e) => { draggingSquare = true; squareWrap.setPointerCapture(e.pointerId); handleSquarePointer(e); });
+    squareWrap.addEventListener('pointermove', (e) => { if(draggingSquare) handleSquarePointer(e); });
+    squareWrap.addEventListener('pointerup', () => { draggingSquare = false; });
+    squareWrap.addEventListener('pointercancel', () => { draggingSquare = false; });
+    hueWrap.addEventListener('pointerdown', (e) => { draggingHue = true; hueWrap.setPointerCapture(e.pointerId); handleHuePointer(e); });
+    hueWrap.addEventListener('pointermove', (e) => { if(draggingHue) handleHuePointer(e); });
+    hueWrap.addEventListener('pointerup', () => { draggingHue = false; });
+    hueWrap.addEventListener('pointercancel', () => { draggingHue = false; });
+    hexInput.addEventListener('input', () => {
+      let raw = hexInput.value.trim();
+      if(!raw.startsWith('#')) raw = `#${raw}`;
+      if(/^#[0-9a-fA-F]{6}$/.test(raw)){
+        const hsv = hexToHsv(raw);
+        hue = hsv.h; sat = hsv.s; val = hsv.v;
+        drawSquare(); updateThumbs(); preview.style.background = raw.toUpperCase();
+      }
+    });
+    hexInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') applyBtn.click(); });
+    function closeOverlay(){ overlay.hidden = true; activeInput = null; }
+    cancelBtn.addEventListener('click', closeOverlay);
+    applyBtn.addEventListener('click', () => {
+      if(activeInput){
+        const hex = hsvToHex(hue, sat, val);
+        activeInput.value = hex;
+        activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      closeOverlay();
+    });
+    overlay.addEventListener('click', (e) => { if(e.target === overlay) closeOverlay(); });
+    function openPicker(input){
+      activeInput = input;
+      const hsv = hexToHsv(input.value || '#000000');
+      hue = hsv.h; sat = hsv.s; val = hsv.v;
+      overlay.hidden = false;
+      requestAnimationFrame(refreshAll);
+    }
+    document.addEventListener('click', (e) => {
+      const input = e.target.closest('input[type=color]');
+      if(!input || !isTouchDevice()) return;
+      e.preventDefault();
+      input.blur();
+      openPicker(input);
+    }, true);
+    window.addEventListener('resize', () => { if(!overlay.hidden) updateThumbs(); });
+  })();
+
+  // ---- Download as PNG ----
+  document.getElementById('downloadBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('downloadBtn');
+    const labelEl = btn.querySelector('.btn-label');
+    const originalLabel = labelEl.textContent;
+    labelEl.textContent = '이미지 생성 중...';
+    btn.disabled = true;
+    document.body.classList.add('exporting');
+    document.activeElement && document.activeElement.blur();
+    // Rows with zero color chips, and empty description/spec text, would
+    // otherwise just leave a blank gap in the export — collapse them entirely.
+    const emptySwatchRows = Array.from(document.querySelectorAll('.swatch-row')).filter(row => !row.querySelector('.swatch'));
+    const emptyTextFields = Array.from(document.querySelectorAll('.p-desc, .item-spec')).filter(el => el.textContent.trim() === '');
+    emptySwatchRows.forEach(row => row.classList.add('export-empty'));
+    emptyTextFields.forEach(el => el.classList.add('export-empty'));
+    try{
+      await document.fonts.ready; // avoid a flash-of-fallback-font in the capture
+      const stage = document.getElementById('stage');
+      const stageRect = stage.getBoundingClientRect();
+
+      // html2canvas re-rasterizes each uploaded photo as part of compositing the
+      // whole page, which visibly softens/blurs them compared to the sharp source
+      // file — capture a supersampled base pass for everything else (text, panels,
+      // swatches), then redraw every photo directly from its original decoded
+      // bitmap straight onto the final canvas, bypassing html2canvas's own lossy
+      // copy of it entirely.
+      const captureScale = 3;
+      const bigCanvas = await html2canvas(stage, { scale: captureScale, backgroundColor: null, useCORS: true });
+      const targetWidth = Math.round(stageRect.width);
+      const targetHeight = Math.round(bigCanvas.height * (targetWidth / bigCanvas.width));
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      const pageBg = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() || '#FAFAF8';
+      ctx.fillStyle = pageBg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bigCanvas, 0, 0, bigCanvas.width, bigCanvas.height, 0, 0, targetWidth, targetHeight);
+
+      const scaleFactor = targetWidth / stageRect.width;
+
+      function drawRoundedRectPath(context, x, y, w, h, r){
+        context.beginPath();
+        context.moveTo(x + r, y);
+        context.arcTo(x + w, y, x + w, y + h, r);
+        context.arcTo(x + w, y + h, x, y + h, r);
+        context.arcTo(x, y + h, x, y, r);
+        context.arcTo(x, y, x + w, y, r);
+        context.closePath();
+      }
+
+      document.querySelectorAll('.img-slot.has-img').forEach(slot => {
+        const img = slot._sourceImage;
+        if(!img) return;
+        const r = slot.getBoundingClientRect();
+        if(r.width === 0 || r.height === 0) return;
+        const boxX = (r.left - stageRect.left) * scaleFactor;
+        const boxY = (r.top - stageRect.top) * scaleFactor;
+        const boxW = r.width * scaleFactor;
+        const boxH = r.height * scaleFactor;
+        const cssRadius = parseFloat(getComputedStyle(slot).borderRadius) || 0;
+
+        ctx.save();
+        drawRoundedRectPath(ctx, boxX, boxY, boxW, boxH, cssRadius * scaleFactor);
+        ctx.clip();
+        ctx.fillStyle = getComputedStyle(slot).backgroundColor;
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+
+        if(slot._crop && slot._crop.mode === 'original'){
+          const dw = img.naturalWidth * scaleFactor;
+          const dh = img.naturalHeight * scaleFactor;
+          const dx = boxX + (boxW - dw) / 2;
+          const dy = boxY + (boxH - dh) / 2;
+          ctx.drawImage(img, dx, dy, dw, dh);
+        }else if(slot._crop && slot._crop.mode === 'custom'){
+          const cssBoxW = slot.clientWidth, cssBoxH = slot.clientHeight;
+          const coverScale = Math.max(cssBoxW / img.naturalWidth, cssBoxH / img.naturalHeight);
+          const drawScale = coverScale * (slot._crop.zoom || 1);
+          const dispW = img.naturalWidth * drawScale, dispH = img.naturalHeight * drawScale;
+          let posX = cssBoxW / 2 - slot._crop.fx * dispW;
+          let posY = cssBoxH / 2 - slot._crop.fy * dispH;
+          if(dispW >= cssBoxW){ posX = Math.min(0, Math.max(cssBoxW - dispW, posX)); }
+          else{ posX = (cssBoxW - dispW) / 2; }
+          if(dispH >= cssBoxH){ posY = Math.min(0, Math.max(cssBoxH - dispH, posY)); }
+          else{ posY = (cssBoxH - dispH) / 2; }
+          ctx.drawImage(img, boxX + posX * scaleFactor, boxY + posY * scaleFactor, dispW * scaleFactor, dispH * scaleFactor);
+        }else{
+          const imgRatio = img.naturalWidth / img.naturalHeight;
+          const boxRatio = boxW / boxH;
+          let sx, sy, sw, sh;
+          if(imgRatio > boxRatio){ sh = img.naturalHeight; sw = sh * boxRatio; sx = (img.naturalWidth - sw) / 2; sy = 0; }
+          else{ sw = img.naturalWidth; sh = sw / boxRatio; sx = 0; sy = (img.naturalHeight - sh) / 2; }
+          ctx.drawImage(img, sx, sy, sw, sh, boxX, boxY, boxW, boxH);
+        }
+        ctx.restore();
+      });
+
+      // The photo redraw above paints over the entire slot, including its own
+      // CSS border and the item-number badge — put both back on top now that
+      // the sharp photo is in place underneath.
+      document.querySelectorAll('.img-slot').forEach(slot => {
+        const cs = getComputedStyle(slot);
+        const bw = parseFloat(cs.borderTopWidth) || 0;
+        if(bw <= 0) return;
+        const r = slot.getBoundingClientRect();
+        if(r.width === 0 || r.height === 0) return;
+        const boxX = (r.left - stageRect.left) * scaleFactor;
+        const boxY = (r.top - stageRect.top) * scaleFactor;
+        const boxW = r.width * scaleFactor;
+        const boxH = r.height * scaleFactor;
+        const cssRadius = parseFloat(cs.borderRadius) || 0;
+        const strokeW = bw * scaleFactor;
+        const inset = strokeW / 2;
+
+        ctx.save();
+        drawRoundedRectPath(ctx, boxX + inset, boxY + inset, boxW - strokeW, boxH - strokeW, Math.max(0, cssRadius * scaleFactor - inset));
+        ctx.strokeStyle = cs.borderTopColor;
+        ctx.lineWidth = strokeW;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      document.querySelectorAll('.item-no').forEach(badge => {
+        const r = badge.getBoundingClientRect();
+        if(r.width === 0 || r.height === 0) return;
+        const cs = getComputedStyle(badge);
+        const dx = (r.left - stageRect.left) * scaleFactor;
+        const dy = (r.top - stageRect.top) * scaleFactor;
+        const dw = r.width * scaleFactor;
+        const dh = r.height * scaleFactor;
+        const radius = Math.min(parseFloat(cs.borderRadius) * scaleFactor, dw / 2, dh / 2);
+        const fontSize = parseFloat(cs.fontSize) * scaleFactor;
+
+        ctx.save();
+        drawRoundedRectPath(ctx, dx, dy, dw, dh, radius);
+        ctx.fillStyle = cs.backgroundColor || 'rgba(0,0,0,.4)';
+        ctx.fill();
+        ctx.fillStyle = cs.color || '#FFFFFF';
+        ctx.font = `${cs.fontWeight || '600'} ${fontSize}px ${cs.fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(badge.textContent || '', dx + dw / 2, dy + dh / 2 + (1 * scaleFactor));
+        ctx.restore();
+      });
+
+      // The photo redraw above paints over the entire slot, including the
+      // small credit-caption pill that sits on top of it in the live page —
+      // put it back now that the sharp photo is in place underneath.
+      document.querySelectorAll('.slot-caption.has-text').forEach(cap => {
+        const r = cap.getBoundingClientRect();
+        if(r.width === 0 || r.height === 0) return;
+        const cs = getComputedStyle(cap);
+        const dx = (r.left - stageRect.left) * scaleFactor;
+        const dy = (r.top - stageRect.top) * scaleFactor;
+        const dw = r.width * scaleFactor;
+        const dh = r.height * scaleFactor;
+        const radius = Math.min(parseFloat(cs.borderRadius) * scaleFactor, dw / 2, dh / 2);
+        const fontSize = parseFloat(cs.fontSize) * scaleFactor;
+
+        ctx.save();
+        drawRoundedRectPath(ctx, dx, dy, dw, dh, radius);
+        ctx.fillStyle = cs.backgroundColor || 'rgba(0,0,0,.55)';
+        ctx.fill();
+        ctx.fillStyle = cs.color || '#FFFFFF';
+        ctx.font = `${cs.fontWeight || '500'} ${fontSize}px ${cs.fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(cap.textContent || '', dx + dw / 2, dy + dh / 2);
+        ctx.restore();
+      });
+
+      // Redraw stickers directly too (same sharpness reasoning as the photo
+      // slots above), reproducing their rotation and optional white-outline
+      // border effect exactly as shown on screen.
+      function drawStickerBorder(silhouette, cx, cy, w, h, radius){
+        const steps = 16;
+        for(let i = 0; i < steps; i++){
+          const angle = (i / steps) * Math.PI * 2;
+          const dx = Math.cos(angle) * radius;
+          const dy = Math.sin(angle) * radius;
+          ctx.drawImage(silhouette, cx + dx, cy + dy, w, h);
+        }
+      }
+      Array.from(document.querySelectorAll('.sticker'))
+        .sort((a, b) => (parseInt(a.style.zIndex) || 0) - (parseInt(b.style.zIndex) || 0))
+        .forEach(el => {
+          const img = el.querySelector('img');
+          if(!img) return;
+          const r = el.getBoundingClientRect();
+          const centerX = (r.left + r.width / 2 - stageRect.left) * scaleFactor;
+          const centerY = (r.top + r.height / 2 - stageRect.top) * scaleFactor;
+          const boxW = el.offsetWidth * scaleFactor;
+          const boxH = el.offsetHeight * scaleFactor;
+          const boxX = -boxW / 2;
+          const boxY = -boxH / 2;
+          const rotationDeg = parseFloat(el.dataset.rotation) || 0;
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          if(rotationDeg) ctx.rotate((rotationDeg * Math.PI) / 180);
+          if(el.classList.contains('has-border') && boxW > 0 && boxH > 0){
+            const silhouetteCanvas = document.createElement('canvas');
+            silhouetteCanvas.width = Math.round(boxW);
+            silhouetteCanvas.height = Math.round(boxH);
+            const sctx = silhouetteCanvas.getContext('2d');
+            sctx.drawImage(img, 0, 0, boxW, boxH);
+            sctx.globalCompositeOperation = 'source-in';
+            sctx.fillStyle = '#fff';
+            sctx.fillRect(0, 0, boxW, boxH);
+            drawStickerBorder(silhouetteCanvas, boxX, boxY, boxW, boxH, 1 * scaleFactor);
+          }
+          ctx.drawImage(img, boxX, boxY, boxW, boxH);
+          ctx.restore();
+        });
+
+      const nameText = document.querySelector('.p-name').textContent.trim() || '캐릭터';
+      const link = document.createElement('a');
+      link.download = `${nameText}_룩북.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }catch(err){
+      alert('이미지를 만드는 중 문제가 발생했습니다. 다시 시도해주세요.');
+      console.error(err);
+    }finally{
+      emptySwatchRows.forEach(row => row.classList.remove('export-empty'));
+      emptyTextFields.forEach(el => el.classList.remove('export-empty'));
+      document.body.classList.remove('exporting');
+      labelEl.textContent = originalLabel;
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
