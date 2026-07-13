@@ -138,9 +138,9 @@
      beside it), the name/tag/description always line-break onto separate
      lines rather than being laid out as siblings of the row/column switch. */
   .profile-text{ display:flex; flex-direction:column; gap:6px; min-width:0; }
-  .p-name{ font-size:21px; font-weight:800; }
-  .p-tag{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); letter-spacing:.02em; }
-  .p-desc{ font-size:12.5px; line-height:1.55; color:var(--ink-text); }
+  .p-name{ font-size:22px; font-weight:800; }
+  .p-tag{ font-family:'Pretendard', sans-serif; font-size:13.5px; font-weight:600; color:var(--ink-soft); letter-spacing:.02em; }
+  .p-desc{ font-size:13.5px; line-height:1.55; color:var(--ink-text); }
 
   /* ---- outfit panel ---- */
   .outfit-panel{ flex:1 1 auto; min-width:0; }
@@ -159,7 +159,7 @@
   .card:hover .card-remove{ display:flex; }
   .card-remove:hover{ border-color:var(--accent); color:var(--accent); }
   .item-meta{ margin-top:12px; }
-  .item-label{ font-size:14.5px; font-weight:700; margin-bottom:8px; }
+  .item-label{ font-size:15.5px; font-weight:700; margin-bottom:8px; }
 
   /* ---- editable text fields (shared) ---- */
   .editable{ outline:none; cursor:text; border-radius:4px; }
@@ -213,7 +213,7 @@
   .img-slot.has-img .clear-btn{ display:flex; }
   .item-no{
     position:absolute; top:8px; left:8px; z-index:5;
-    font-family:'IBM Plex Mono', monospace; font-size:10.5px; font-weight:600;
+    font-family:'Pretendard', sans-serif; font-size:10.5px; font-weight:600;
     color:#fff; background:rgba(0,0,0,.4); padding:3px 7px; border-radius:3px; letter-spacing:.03em;
     display:inline-flex; align-items:center; justify-content:center; line-height:1;
   }
@@ -224,7 +224,7 @@
     position:absolute; right:4px; bottom:8px; left:auto; z-index:4;
     max-width:calc(100% - 8px); margin:0; padding:4px 10px;
     background:rgba(0,0,0,.55); border:none; border-radius:8px; color:#fff;
-    font-family:'Pretendard', sans-serif; font-size:11px; font-weight:500; line-height:15px;
+    font-family:'Pretendard', sans-serif; font-size:12px; font-weight:500; line-height:16px;
     text-align:right; white-space:nowrap; overflow:hidden; cursor:text;
     opacity:0; pointer-events:none; transition:opacity .12s ease, bottom .12s ease;
   }
@@ -267,7 +267,7 @@
   }
   .add-swatch-btn:hover{ border-color:var(--accent); color:var(--accent); }
   .item-spec{
-    font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--ink-soft); letter-spacing:.01em;
+    font-family:'Pretendard', sans-serif; font-size:11.5px; color:var(--ink-soft); letter-spacing:.01em;
   }
 
   /* ---------- Crop overlay ---------- */
@@ -526,7 +526,7 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
     padding:10px 16px; overflow:hidden; outline:none; cursor:text;
     font-family:'Pretendard', sans-serif; font-weight:600; line-height:1.35;
-    font-size:16px; color:var(--ink-text); border-radius:10px;
+    font-size:17px; color:var(--ink-text); border-radius:10px;
     transition:box-shadow .12s ease;
   }
   .textbox-content:focus{ box-shadow:0 0 0 3px rgba(51,70,95,.12); }
@@ -536,7 +536,7 @@
   .textbox[data-style="plain"] .textbox-content{ background:transparent; border:none; }
   .textbox[data-style="tag"] .textbox-content{
     background:var(--ink); color:#fff; border:none; border-radius:999px;
-    font-family:'IBM Plex Mono', monospace; font-size:12.5px; letter-spacing:.04em; text-transform:uppercase;
+    font-family:'Pretendard', sans-serif; font-size:13.5px; letter-spacing:.04em; text-transform:uppercase;
   }
   .textbox[data-style="bubble"] .textbox-content{ background:#fff; border:1px solid var(--ink); border-radius:20px; }
   .textbox[data-style="postit"] .textbox-content{
@@ -624,7 +624,7 @@
     cursor:crosshair; z-index:30; overflow:hidden;
   }
   .ruler-tick{
-    position:absolute; font-family:'IBM Plex Mono', monospace; font-size:8px; color:var(--ink-soft);
+    position:absolute; font-family:'Pretendard', sans-serif; font-size:8px; color:var(--ink-soft);
     pointer-events:none; white-space:nowrap;
   }
   .ruler-top .ruler-tick{ top:0; height:100%; border-left:1px solid var(--line); padding:2px 0 0 2px; }
@@ -638,7 +638,7 @@
   .guide-h .guide-hit{ left:0; right:0; top:-5px; height:11px; }
   .guide-v .guide-hit{ top:0; bottom:0; left:-5px; width:11px; }
   .guide-label{
-    position:absolute; background:var(--accent); color:#fff; font-family:'IBM Plex Mono', monospace;
+    position:absolute; background:var(--accent); color:#fff; font-family:'Pretendard', sans-serif;
     font-size:9px; padding:1px 5px; border-radius:2px; pointer-events:none; white-space:nowrap; opacity:0;
     transition:opacity .12s ease;
   }
@@ -1410,6 +1410,27 @@
   const dotPatternToggle = document.getElementById('dotPatternToggle');
   const patternTypeRow = document.getElementById('patternTypeRow');
   let bgPatternType = 'dot';
+  function makePatternTileDataUrl(type, dotColor, lineColor, tileW, tileH){
+    const scale = 3; // supersample so the tile still looks crisp at export resolution
+    const c = document.createElement('canvas');
+    c.width = tileW * scale;
+    c.height = tileH * scale;
+    const cctx = c.getContext('2d');
+    if(type === 'grid'){
+      cctx.fillStyle = lineColor;
+      cctx.fillRect(0, 0, c.width, scale);
+      cctx.fillRect(0, 0, scale, c.height);
+    }else if(type === 'lines'){
+      cctx.fillStyle = lineColor;
+      cctx.fillRect(0, 0, c.width, scale);
+    }else{
+      cctx.fillStyle = dotColor;
+      cctx.beginPath();
+      cctx.arc(c.width / 2, c.height / 2, 1.2 * scale, 0, Math.PI * 2);
+      cctx.fill();
+    }
+    return c.toDataURL('image/png');
+  }
   function applyBgPattern(){
     patternTypeRow.classList.toggle('visible', dotPatternToggle.checked);
     if(!dotPatternToggle.checked){
@@ -1423,18 +1444,16 @@
     const dark = getHexBrightness(hex) < 140;
     const dotColor = dark ? 'rgba(255,255,255,.22)' : 'rgba(30,30,30,.14)';
     const lineColor = dark ? 'rgba(255,255,255,.16)' : 'rgba(30,30,30,.10)';
-    let image, size;
+    let tileW, tileH, size;
     if(bgPatternType === 'grid'){
-      image = `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px)`;
-      size = '24px 24px';
+      tileW = 24; tileH = 24; size = '24px 24px';
     }else if(bgPatternType === 'lines'){
-      image = `linear-gradient(to bottom, ${lineColor} 1px, transparent 1px)`;
-      size = '100% 28px';
+      tileW = 4; tileH = 28; size = '100% 28px';
     }else{
-      image = `radial-gradient(circle, ${dotColor} 1.2px, transparent 1.2px)`;
-      size = '22px 22px';
+      tileW = 22; tileH = 22; size = '22px 22px';
     }
-    document.documentElement.style.setProperty('--bg-pattern', image);
+    const tileUrl = makePatternTileDataUrl(bgPatternType, dotColor, lineColor, tileW, tileH);
+    document.documentElement.style.setProperty('--bg-pattern', `url(${tileUrl})`);
     document.documentElement.style.setProperty('--bg-pattern-size', size);
   }
   dotPatternToggle.addEventListener('change', applyBgPattern);
@@ -2374,6 +2393,15 @@
     }, true);
     window.addEventListener('resize', () => { if(!overlay.hidden) updateThumbs(); });
   })();
+
+  // Escape closes whichever full-screen overlay is currently open — neither
+  // the crop editor nor the touch color picker had a keyboard dismiss path.
+  document.addEventListener('keydown', (e) => {
+    if(e.key !== 'Escape') return;
+    if(!cropOverlay.hidden){ closeCropEditor(); return; }
+    const ccpOverlay = document.getElementById('ccpOverlay');
+    if(ccpOverlay && !ccpOverlay.hidden) ccpOverlay.hidden = true;
+  });
 
   // ---- Download as PNG ----
   document.getElementById('downloadBtn').addEventListener('click', async () => {
