@@ -2502,63 +2502,6 @@
         context.closePath();
       }
 
-      // html2canvas doesn't render box-shadow, so the postit-style textbox's
-      // drop shadow silently disappears in the export. Recreate it manually:
-      // compute the box's rotated rectangle, then for each shadow layer draw
-      // its caster far off-canvas (so its own opaque fill never rasterizes
-      // inside the visible canvas at all) and use shadowOffsetX/Y to bring
-      // only the blurred shadow back to the correct on-canvas position. A
-      // clip excludes the box's own real (unshifted) footprint so the
-      // already-correct box + text baked into bigCanvas is left untouched —
-      // only the halo around it is added.
-      document.querySelectorAll('.textbox[data-style="postit"] .textbox-content').forEach(content => {
-        const r = content.getBoundingClientRect();
-        if(r.width === 0 || r.height === 0) return;
-        const cs = getComputedStyle(content);
-        const cx = (r.left + r.width / 2 - stageRect.left) * scaleFactor;
-        const cy = (r.top + r.height / 2 - stageRect.top) * scaleFactor;
-        const halfW = (content.offsetWidth / 2) * scaleFactor;
-        const halfH = (content.offsetHeight / 2) * scaleFactor;
-        let angle = 0;
-        const m = (cs.transform || '').match(/matrix\(([^)]+)\)/);
-        if(m){
-          const p = m[1].split(',').map(Number);
-          angle = Math.atan2(p[1], p[0]);
-        }
-        function rectCorners(offsetX, offsetY){
-          const off = { x: offsetX * Math.cos(angle) - offsetY * Math.sin(angle), y: offsetX * Math.sin(angle) + offsetY * Math.cos(angle) };
-          return [[-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH]]
-            .map(([px, py]) => ({ x: cx + off.x + px * Math.cos(angle) - py * Math.sin(angle), y: cy + off.y + px * Math.sin(angle) + py * Math.cos(angle) }));
-        }
-        function pathFromCorners(corners){
-          ctx.moveTo(corners[0].x, corners[0].y);
-          ctx.lineTo(corners[1].x, corners[1].y);
-          ctx.lineTo(corners[2].x, corners[2].y);
-          ctx.lineTo(corners[3].x, corners[3].y);
-          ctx.closePath();
-        }
-        const ownCorners = rectCorners(0, 0);
-        const OFFSCREEN = 4000;
-
-        [{ dx: 0, dy: 4, blur: 12, alpha: 0.18 }, { dx: 0, dy: 1, blur: 3, alpha: 0.12 }].forEach(layer => {
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(0, 0, canvas.width, canvas.height);
-          pathFromCorners(ownCorners);
-          ctx.clip('evenodd');
-          const shifted = rectCorners(layer.dx, layer.dy).map(pt => ({ x: pt.x + OFFSCREEN, y: pt.y + OFFSCREEN }));
-          ctx.shadowColor = `rgba(0,0,0,${layer.alpha})`;
-          ctx.shadowBlur = layer.blur * scaleFactor;
-          ctx.shadowOffsetX = -OFFSCREEN;
-          ctx.shadowOffsetY = -OFFSCREEN;
-          ctx.fillStyle = 'rgba(0,0,0,1)';
-          ctx.beginPath();
-          pathFromCorners(shifted);
-          ctx.fill();
-          ctx.restore();
-        });
-      });
-
       document.querySelectorAll('.img-slot.has-img').forEach(slot => {
         const img = slot._sourceImage;
         if(!img) return;
@@ -2734,6 +2677,95 @@
           ctx.drawImage(img, boxX, boxY, boxW, boxH);
           ctx.restore();
         });
+
+      // Text boxes are drawn on top of everything live (they come last in the
+      // DOM), but the sharp photo/sticker redraws above repaint their own
+      // pixels directly onto the canvas at native size — which blindly paints
+      // over any text box positioned on top of an image or sticker. bigCanvas
+      // (the original full-page capture, taken before any of those redraws)
+      // already has every text box rendered exactly as shown on screen —
+      // rotation, tails, everything — so just lift each box's region back out
+      // of it and stamp it on top now, in DOM order so overlapping boxes keep
+      // the same stacking they have live. A margin around each box's own
+      // (unrotated) bounding rect keeps postit rotation corners and speech
+      // -bubble tails, which poke outside that rect, from being cropped off.
+      const bigScale = bigCanvas.width / stageRect.width;
+      const TEXTBOX_PAD = 40; // css px
+      function drawBigCanvasRegionClamped(sx, sy, sw, sh, dx, dy, dw, dh){
+        if(sx < 0){ const cut = -sx; const ratio = cut / sw; sx = 0; sw -= cut; dx += dw * ratio; dw -= dw * ratio; }
+        if(sy < 0){ const cut = -sy; const ratio = cut / sh; sy = 0; sh -= cut; dy += dh * ratio; dh -= dh * ratio; }
+        if(sx + sw > bigCanvas.width){ const over = (sx + sw) - bigCanvas.width; const ratio = over / sw; sw -= over; dw -= dw * ratio; }
+        if(sy + sh > bigCanvas.height){ const over = (sy + sh) - bigCanvas.height; const ratio = over / sh; sh -= over; dh -= dh * ratio; }
+        if(sw <= 0 || sh <= 0) return;
+        ctx.drawImage(bigCanvas, sx, sy, sw, sh, dx, dy, dw, dh);
+      }
+      document.querySelectorAll('.textbox').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if(r.width === 0 || r.height === 0) return;
+        const left = r.left - TEXTBOX_PAD, top = r.top - TEXTBOX_PAD;
+        const w = r.width + TEXTBOX_PAD * 2, h = r.height + TEXTBOX_PAD * 2;
+        drawBigCanvasRegionClamped(
+          (left - stageRect.left) * bigScale, (top - stageRect.top) * bigScale, w * bigScale, h * bigScale,
+          (left - stageRect.left) * scaleFactor, (top - stageRect.top) * scaleFactor, w * scaleFactor, h * scaleFactor
+        );
+      });
+
+      // html2canvas doesn't render box-shadow, so the postit-style textbox's
+      // drop shadow silently disappears in the export. Recreate it manually:
+      // compute the box's rotated rectangle, then for each shadow layer draw
+      // its caster far off-canvas (so its own opaque fill never rasterizes
+      // inside the visible canvas at all) and use shadowOffsetX/Y to bring
+      // only the blurred shadow back to the correct on-canvas position. A
+      // clip excludes the box's own real (unshifted) footprint so the
+      // already-correct box + text baked into bigCanvas (just re-stamped
+      // above) is left untouched — only the halo around it is added.
+      document.querySelectorAll('.textbox[data-style="postit"] .textbox-content').forEach(content => {
+        const r = content.getBoundingClientRect();
+        if(r.width === 0 || r.height === 0) return;
+        const cs = getComputedStyle(content);
+        const cx = (r.left + r.width / 2 - stageRect.left) * scaleFactor;
+        const cy = (r.top + r.height / 2 - stageRect.top) * scaleFactor;
+        const halfW = (content.offsetWidth / 2) * scaleFactor;
+        const halfH = (content.offsetHeight / 2) * scaleFactor;
+        let angle = 0;
+        const m = (cs.transform || '').match(/matrix\(([^)]+)\)/);
+        if(m){
+          const p = m[1].split(',').map(Number);
+          angle = Math.atan2(p[1], p[0]);
+        }
+        function rectCorners(offsetX, offsetY){
+          const off = { x: offsetX * Math.cos(angle) - offsetY * Math.sin(angle), y: offsetX * Math.sin(angle) + offsetY * Math.cos(angle) };
+          return [[-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH]]
+            .map(([px, py]) => ({ x: cx + off.x + px * Math.cos(angle) - py * Math.sin(angle), y: cy + off.y + px * Math.sin(angle) + py * Math.cos(angle) }));
+        }
+        function pathFromCorners(corners){
+          ctx.moveTo(corners[0].x, corners[0].y);
+          ctx.lineTo(corners[1].x, corners[1].y);
+          ctx.lineTo(corners[2].x, corners[2].y);
+          ctx.lineTo(corners[3].x, corners[3].y);
+          ctx.closePath();
+        }
+        const ownCorners = rectCorners(0, 0);
+        const OFFSCREEN = 4000;
+
+        [{ dx: 0, dy: 4, blur: 12, alpha: 0.18 }, { dx: 0, dy: 1, blur: 3, alpha: 0.12 }].forEach(layer => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, canvas.width, canvas.height);
+          pathFromCorners(ownCorners);
+          ctx.clip('evenodd');
+          const shifted = rectCorners(layer.dx, layer.dy).map(pt => ({ x: pt.x + OFFSCREEN, y: pt.y + OFFSCREEN }));
+          ctx.shadowColor = `rgba(0,0,0,${layer.alpha})`;
+          ctx.shadowBlur = layer.blur * scaleFactor;
+          ctx.shadowOffsetX = -OFFSCREEN;
+          ctx.shadowOffsetY = -OFFSCREEN;
+          ctx.fillStyle = 'rgba(0,0,0,1)';
+          ctx.beginPath();
+          pathFromCorners(shifted);
+          ctx.fill();
+          ctx.restore();
+        });
+      });
 
       const nameText = document.querySelector('.p-name').textContent.trim() || '캐릭터';
       const link = document.createElement('a');
