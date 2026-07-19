@@ -701,7 +701,7 @@
 <div class="topbar">
   <div class="brand">
     <div class="mark">룩북<span> 메이커</span></div>
-    <div class="version-badge">ver1.0</div>
+    <div class="version-badge">ver1.5</div>
   </div>
   <div class="actions">
     <button class="ghost toolbar-btn" id="saveBtn" title="저장"><svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span class="btn-label">저장</span></button>
@@ -1053,6 +1053,10 @@
     slot._dataUrl = null;
   }
 
+  // Tracks whichever image target (a slot, or the background swatch) the
+  // mouse is currently hovering, so a clipboard paste knows where to go.
+  let pasteHoverTarget = null;
+
   function wireImgSlot(slot){
     if(slot._wired) return;
     slot._wired = true;
@@ -1081,6 +1085,12 @@
         input.files = e.dataTransfer.files;
         input.dispatchEvent(new Event('change'));
       }
+    });
+    // Hover tracking so a clipboard paste (Ctrl/Cmd+V) lands in whichever
+    // slot the cursor is currently over.
+    slot.addEventListener('mouseenter', () => { pasteHoverTarget = { type: 'slot', slot }; });
+    slot.addEventListener('mouseleave', () => {
+      if(pasteHoverTarget && pasteHoverTarget.type === 'slot' && pasteHoverTarget.slot === slot) pasteHoverTarget = null;
     });
   }
   document.querySelectorAll('.img-slot').forEach(wireImgSlot);
@@ -1595,6 +1605,10 @@
     e.stopPropagation();
     setStageBgImage(null);
   });
+  bgImageSwatch.addEventListener('mouseenter', () => { pasteHoverTarget = { type: 'bg' }; });
+  bgImageSwatch.addEventListener('mouseleave', () => {
+    if(pasteHoverTarget && pasteHoverTarget.type === 'bg') pasteHoverTarget = null;
+  });
   bgImageBlurRange.addEventListener('input', () => {
     document.documentElement.style.setProperty('--stage-bg-blur', bgImageBlurRange.value + 'px');
     bgImageBlurVal.textContent = bgImageBlurRange.value + 'px';
@@ -1832,6 +1846,42 @@
     reader.onload = (ev) => { createSticker(ev.target.result); };
     reader.readAsDataURL(file);
     input.value = '';
+  });
+
+  // ---- Clipboard paste: Ctrl/Cmd+V an image straight in, no save needed ----
+  // Hover a profile/outfit slot or the background-image swatch and paste to
+  // fill it directly; paste anywhere else on the page and it's added as a
+  // free-floating sticker instead. Text pastes into editable fields are left
+  // completely alone (checked via document.activeElement) so this never
+  // interferes with normal typing/pasting in captions, names, etc.
+  document.addEventListener('paste', (e) => {
+    const active = document.activeElement;
+    const isTextEditable = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+    if(isTextEditable) return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    let imageItem = null;
+    for(const item of items){
+      if(item.kind === 'file' && item.type && item.type.startsWith('image/')){ imageItem = item; break; }
+    }
+    if(!imageItem) return;
+    const file = imageItem.getAsFile();
+    if(!file) return;
+    e.preventDefault();
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      if(pasteHoverTarget && pasteHoverTarget.type === 'slot'){
+        setSlotImage(pasteHoverTarget.slot, dataUrl);
+      }else if(pasteHoverTarget && pasteHoverTarget.type === 'bg'){
+        loadDownscaledImage(file, 1800, 0.85)
+          .then((scaledUrl) => setStageBgImage(scaledUrl))
+          .catch(() => alert('이미지를 불러오지 못했어요. 다른 이미지로 시도해주세요.'));
+      }else{
+        createSticker(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
   });
 
   // ---- Text boxes (free-floating editable labels, sticker-like) ----
